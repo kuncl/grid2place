@@ -20,10 +20,10 @@ param_FlagPP = 1.000000
 param_griddata = 250.000000
 
 strdef param_gridmodel_path
-sprint(param_gridmodel_path, "./gridnum_250_100trials/")
+sprint(param_gridmodel_path, "./gridnum_250/")
 
 strdef param_outputfolder
-sprint(param_outputfolder, "./data/190313_multi_gridnum_%d/", param_griddata)
+sprint(param_outputfolder, "./data/multi_gridnum_%d/", param_griddata)
 
 func floor_temp() { localobj v
 	v = new Vector()
