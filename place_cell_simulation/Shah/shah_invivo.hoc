@@ -1,0 +1,350 @@
+// Shah 2011
+begintemplate shah
+	public soma, axon, dendrite, user5, dend_5, apic,  dend
+	public pre_list, connect2target//, pre_listin
+	objref pre_list
+	// objref pre_listin
+	
+	public desc
+	strdef desc
+	public Vrest
+
+	xopen("ri06.hoc")             // geometry file
+
+	objref sg
+	proc init() { 
+		sprint(desc, $s1)			// Cell Description
+		pre_list = new List()		// Presynaptic List
+		// pre_listin = new List()		// Presynaptic List				
+		
+		// Morphology Initialize
+		topol()						// Topology in geometry file
+		section()					// Section in geometry file		
+		sg=new Shape()				// Shape Plot
+		setScale()					// Coordination define
+
+		// Biophysical Initialize
+		Vrest = -60					// Resting Potential
+		initbiophys()				// Paramter Initialization
+		biophys()					// Set parameters
+		
+		
+		synapse()
+	}
+	// set up xyz scale bars
+	create xScale, yScale, zScale
+	proc anatscale() {
+		if ($4>0) {  // if length arg is <= 0 then do nothing
+			xScale {
+					pt3dclear()
+					pt3dadd($1, $2, $3, 1)
+					pt3dadd($1+$4, $2, $3, 1)
+			}
+			yScale {
+					pt3dclear()
+					pt3dadd($1, $2, $3, 1)
+					pt3dadd($1, $2+$4, $3, 1)
+			}
+			zScale {
+					pt3dclear()
+					pt3dadd($1, $2, $3, 1)
+					pt3dadd($1, $2, $3+$4, 1)
+			}
+		}
+	}
+	proc setScale() {
+		anatscale(100,0,0,100)  // xyz coords of origin, and length for Shape Plot
+	}
+	
+	
+	public gna, gkdr,gka,ghd,gkm,Rm,RaAll
+	public all, apical_list, trunk_list
+	objref all, apical_list, soma_list, basal_list,trunk_list
+	strdef filename, dends, trunk
+	proc initbiophys() { 	
+		Rm = 80000				// Membrane Resistance for whole compartment
+		RmAx = Rm				// Membrane Resistance for Axon
+		RmSoma = Rm				// Membrane Resistance for Soma
+		RmDend = Rm				// Membrane Resistance for Dendrite
+		
+		Cm    = 1.5				// Capacitance ///// 1.5
+		CmAx = Cm				// Capacitance for Axon
+		CmSoma = Cm				// Capacitance for Soma
+		CmDend = Cm				// Capacitance for Dendrite
+		
+		RaAll= 420				// Axial REsistance 
+		RaAx = 50				// Axial Resistance for Axon
+		RaSoma = RaAll			// Axial Resistance for Soma
+		RaDend = RaAll			// Axial Resistance for Dendrite
+		
+		gna =  0.0094 // .0094			// Maximal conductance for sodium  
+		AXONM = 3				// Amplifying value for Axon
+		gkdr = .00105			// Maximal conductance for KDR
+		nash = 14.3				// Shifting variable for Vhalf of sodium
+		ka = .00104		// Maximal conductance for A-type K+ channel // 104
+		ghd = 0.000005			// Maximal conductance for h-current  //  0.000005	
+		gkm = 0.000045  // Maximal conductance for M-type K+ channel //// 45
+		
+	}
+	
+	proc biophys() {
+		// Passive Properties 
+		forsec axon_list {insert pas e_pas=Vrest g_pas = 1/RmAx Ra=RaAx cm=CmAx}
+		forsec "soma" {insert pas e_pas=Vrest g_pas = 1/RmSoma Ra=RaSoma cm=CmSoma}
+		forsec basal_list {insert pas e_pas=Vrest g_pas = 1/RmDend Ra=RaAll cm=CmDend}
+		forsec apical_list {insert pas e_pas=Vrest g_pas = 1/RmDend Ra=RaAll cm=CmDend}
+		forsec trunk_list {insert pas e_pas=Vrest g_pas = 1/RmDend Ra=RaAll cm=CmDend}
+
+		access soma
+		distance()
+		
+		// Active Properties
+		
+		// Axon
+		forsec axon_list {   
+			insert km gbar_km=gkm
+			insert nax gbar_nax=gna*AXONM	sh_nax = nash
+			insert kdr gkdrbar_kdr=gkdr*AXONM
+			insert kap gkabar_kap = ka
+
+		}
+		
+		// Soma
+		forsec "soma" {   
+			insert km gbar_km=gkm
+			insert hd ghdbar_hd=ghd	
+			insert na3 gbar_na3=gna	sh_na3 = nash
+			insert kdr gkdrbar_kdr=gkdr
+			insert kap gkabar_kap = ka
+		}
+		
+		// Basal dendrite
+		forsec basal_list {
+			insert km gbar_km=gkm
+			insert hd ghdbar_hd=ghd	
+			insert na3 gbar_na3=gna		sh_na3 = nash
+			insert kdr gkdrbar_kdr=gkdr
+			insert kap gkabar_kap=0
+			insert kad gkabar_kad=0
+
+			for (x,0) { xdist = distance(x)
+				ghdbar_hd(x) = ghd*(1+3*xdist/100)
+				if (xdist > 100){
+					gkabar_kad(x) = ka*(1+xdist/100)
+				} else {
+					gkabar_kap(x) = ka*(1+xdist/100)
+				}
+			}
+		}
+		
+		// Apical Trunk
+		forsec trunk_list {
+			insert km gbar_km=gkm		
+			insert hd ghdbar_hd=ghd	
+			insert na3 gbar_na3=gna		sh_na3 = nash
+			insert kdr gkdrbar_kdr=gkdr
+			insert kap gkabar_kap=0
+			insert kad gkabar_kad=0
+
+			for (x,0) { xdist = distance(x)
+				ghdbar_hd(x) = ghd*(1+3*xdist/100)
+				if (xdist > 100){
+					gkabar_kad(x) = ka*(1+xdist/100)
+				} else {
+					gkabar_kap(x) = ka*(1+xdist/100)
+				}
+			}
+		}
+		
+		// Apical Dendrite
+		forsec apical_list {
+			insert km gbar_km=gkm		
+			insert hd ghdbar_hd=ghd	
+			insert na3 gbar_na3=gna		sh_na3 = nash
+			insert kdr gkdrbar_kdr=gkdr
+			insert kap gkabar_kap=0
+			insert kad gkabar_kad=0
+
+			for (x,0) { xdist = distance(x)
+				ghdbar_hd(x) = ghd*(1+3*xdist/100)
+				if (xdist > 100){
+					gkabar_kad(x) = ka*(1+xdist/100)
+				} else {
+					gkabar_kap(x) = ka*(1+xdist/100)
+				}
+			}
+		}
+
+		//Reversal Potentials
+        forall {
+			insert ds
+			v=Vrest
+			if (ismembrane("nax") || ismembrane("na3")) {ena=55}
+			if (ismembrane("KahpM95") || ismembrane("kap") || ismembrane("kad")) {ek=-90}
+			if (ismembrane("hd") ) {ehd_hd=-30}
+		}		
+	}
+	
+	// Current balancing
+	public current_balance
+	proc current_balance() {
+		finitialize(Vrest)
+        fcurrent()		
+		finitialize()		
+		
+	}
+	
+	// -------------------------------------
+	// Modifiers 
+	// ----------------------------------------
+	
+	// Fig.1 
+	// Set XE991 (IKM) to whole compartment
+	public setXE991
+	proc setXE991() {
+		forall {
+			if (ismembrane("km")) {
+				org_km =gbar_km
+				gbar_km = 0
+			}
+		}
+	}
+	// Wash XE991 (IKM) to whole compartment
+	public washXE991
+	proc washXE991() { 
+		forall {
+			if (ismembrane("km")) {
+				gbar_km =  org_km
+			}
+		}
+	}
+	// Set ZD7288 (Ih) to whole compartment
+	public setZD7288
+	proc setZD7288() {
+		forall {
+			if (ismembrane("hd")) {
+				org_hd =ghdbar_hd
+				ghdbar_hd = 0
+			}
+		}
+	}	
+	
+	// Fig. 2
+	// Set XE991 (IKM) to proximal part
+	public spc_sec
+	objref spc_sec
+	public setXE991_prox2
+	proc setXE991_prox2() {
+		spc_sec = new SectionList()
+	
+		forall {
+			for (x,0) { xdist = distance(x)
+				if (xdist <= $1) {
+					org_km =gbar_km
+					gbar_km = 0				
+					spc_sec.append()
+
+				}				
+			}					
+		}
+		forsec basal_list {
+			if (ismembrane("km")) {
+				org_km =gbar_km
+				gbar_km = 0
+				spc_sec.append()
+				
+			}
+		}
+	}
+	// Set XE991 (IKM) to distal part
+	public setXE991_dist2
+	proc setXE991_dist2() {
+		spc_sec = new SectionList()
+		
+		forsec trunk_list {
+			for (x,0) { xdist = distance(x)
+				if (xdist > $1) {
+					org_km =gbar_km
+					gbar_km = 0
+					spc_sec.append()
+				}				
+			}					
+		}		
+		
+		forsec apical_list {
+			for (x,0) { xdist = distance(x)
+				if (xdist > $1) {
+					org_km =gbar_km
+					gbar_km = 0				
+					spc_sec.append()
+				}				
+			}					
+		}
+	}	
+	
+	// Fig. 3
+	// Modify the steepness of KM channel activation
+	public setKMSteep
+	proc setKMSteep() {
+		forall { 
+			klamp_km = $1
+		}		
+	}
+	// Modify the time constant of KM channel
+	public setKMTau
+	proc setKMTau() {
+		forall { 
+			tauamp_km = $1
+		}		
+	}
+	
+	// Connect Synapse -- Presynaptic Source
+	obfunc connect2target() { localobj nc //$o1 target point process, optional $o2 returned NetCon
+	  soma nc = new NetCon(&v(0.5), $o1)
+	  nc.threshold = -0
+	  if (numarg() == 2) { $o2 = nc } // for backward compatibility
+	  return nc
+	}
+
+
+	
+	// public syn
+	// proc synapse() { localobj syn
+		// soma syn = new Exp2Syn(0.5)
+		// syn.tau1 = 0.1 // tau rise (ms)
+		// syn.tau2 = 80 // tau fall (ms)
+	    // syn.e = 0  //0
+	    // syn.i = 0
+	   // pre_list.append(syn)
+
+	// }
+	public setSynTau	
+	proc setSynTau() {
+		pre_list.o(0).tau = $1
+	}
+	
+	public syn, synin
+	proc synapse() { localobj syn, synin
+	   
+	   	dend_5[13] syn = new ExpSyn(0.5)
+		syn.tau = 15 // 2.5 // tau fall (ms)
+	    syn.e = 0  // AMPA reversal potential
+	    pre_list.append(syn)
+	   
+	   	// dend_5[13] syn = new Exp2Syn(0.5)
+		// syn.tau1 = 0.1 // tau rise (ms)
+		// syn.tau2 = 2.4 // tau fall (ms)
+	    // syn.e = 0  // AMPA reversal potential
+	   // pre_list.append(syn)
+	   
+		// dend_5[13] synin = new ExpSyn(0.5)
+		// synin.tau = 30 // tau fall (ms)
+	    // synin.e = -77  // GABA reversal potential 
+	   // pre_list.append(synin)
+	}
+	
+	// Is artificial cell?
+	public is_art
+	func is_art() { return 0}
+
+endtemplate shah

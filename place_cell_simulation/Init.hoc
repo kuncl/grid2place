@@ -1,0 +1,340 @@
+// ===============================================================================
+// Title : Phase Precession Experiment Simulation
+// Author : Hyun Jae, Jang
+// Create Date : 2014. 02. 31
+// ===============================================================================
+
+/************************************
+		Define Library Path
+*************************************/
+strdef libpath
+sprint(libpath,"./0.NeuroLib")
+{load_file("./0.NeuroLib/common.hoc")}
+
+
+/************************************
+		Initialize Simulation
+*************************************/
+mkdir("Figures")
+
+objref ExpCon
+ExpCon = new ExpControl(param_DataSetId)				// Load Experimental Controller
+//ExpCon.setExpID()
+
+/************************************
+	   Define Cell and Network
+*************************************/
+{load_file("InitNetwork.hoc")}			// Load sections for cell and network
+
+/************************************
+	   Initializing Sequence
+*************************************/
+
+// Initialization Blcok
+proc custominit() { local i
+	for (i=0;i<CellCon.types.count();i+=1){
+		for (j=0;j<CellCon.o(i).getCells().count();j+=1){
+			CellCon.o(i).o(j).current_balance(CellCon.o(i).o(j).Vrest)		// Current-balancing
+			CellCon.o(i).o(j).soma.v = CellCon.o(i).o(j).Vrest				// Initial Potential
+		}
+	}
+}
+proc init() {
+	dt = 0.1											// Sampling Rate
+	celsius = 32										// Celsius
+
+    finitialize(v_init)									// Total initilization of cells
+	custominit()										// Initialization of each cell
+	finitialize()
+	fcurrent()											// Current initialization
+	frecord_init()										// Initialization for recording
+
+	for (i=0;i<graphList[0].count();i+=1){
+		graphList[0].o(i).size(0, tstop, graphList[0].o(i).size(3),graphList[0].o(i).size(4))
+	}
+	
+	flag20 = 0
+	flag40 = 0
+	flag60 = 0
+	flag80 = 0
+}
+
+proc advance() {
+    fadvance()
+	// print t
+	if (flag80==0 && t>tstop*0.8	){
+	   print "Simulation 80% done, "
+	   flag80 = 1
+	} else if (flag60==0 && t>tstop*0.6	){
+		print "Simulation 60% done, "
+	   flag60 = 1
+	} else if (flag40==0 && t>tstop*0.4	){
+		print "Simulation 40% done, "
+	   flag40 = 1
+	} else if (flag20==0 && t>tstop*0.2	){
+		print "Simulation 20% done, "
+		flag20 = 1
+	} 
+}
+proc my_run() {
+	adjust_graph()
+	stdinit()
+	run()
+	end_run()
+}
+proc end_run() {
+
+}
+proc play_vector() {
+	$o1.play(&$o2.amp,dt)
+	print "Play Vector Called at root", $o1, $o2
+}
+CellCon.setSave(lib.true)
+
+
+/************************************
+	   140805 Grid data
+*************************************/
+
+objref gridraw 
+objref gridrawin
+objectvar griddata 
+objectvar griddatain
+objref griddata_v_list, griddata_vs_list, griddata_nc_list, griddata_syn_list
+strdef griddatapath
+
+griddata_v_list = new List()
+griddata_vs_list = new List()
+griddata_nc_list = new List()
+griddata_syn_list = new List()
+objref gridy 
+objref vs
+objref nc
+objref syn
+
+maxTstop = 0
+minTstop = 999999
+for (idxGridInput = 1;idxGridInput<= param_griddata; idxGridInput+=1) {
+	sprint(griddatapath, "%s/grid2spks_%d.txt",param_gridmodel_path, idxGridInput)
+
+	gridraw = new File ()
+	gridraw.ropen(griddatapath)  //  input in ms
+
+	griddata = new Vector()
+	while(!gridraw.eof()) { 
+		griddata.append(gridraw.scanvar())
+	}
+	gridraw.close()
+
+	if (minTstop > griddata.min()){
+		minTstop = griddata.min()
+	}
+	if (maxTstop <= griddata.max()){
+		maxTstop = griddata.max()
+	}
+	griddata_v_list.append(griddata)
+
+}
+maxTstop =  maxTstop - minTstop
+
+// Multiple synapses along distance 
+access shah[0].soma
+distance()
+objref v_dend_dist_x1,v_dend_dist_x2,v_dend_dist_id
+v_dend_dist_x1 = new Vector()
+v_dend_dist_x2 = new Vector()
+v_dend_dist_id = new Vector()
+
+minDist = 300
+maxDist = 400
+// MEC synaptic input 300~400 um
+
+findingWay = 1 // for synapse randomisation allocation
+for (idxGridInput = 1;idxGridInput<= param_griddata; idxGridInput+=1) {
+	//Synapse Position Finding
+	currDist = minDist+((maxDist-minDist)/param_griddata)*(idxGridInput-1)
+	
+	if (findingWay==1) {
+		for (idxDend = 0;idxDend<37;idxDend+=1){
+			access shah[0].dend_5[idxDend]
+			if (distance(0.0) <= currDist && distance(1) > currDist){
+				relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+				print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+				break
+			}		
+		}
+	}else if (findingWay==2) {
+		for (idxDend = 36;idxDend>=0;idxDend-=1){
+			access shah[0].dend_5[idxDend]
+			if (distance(0.0) <= currDist && distance(1) > currDist){
+				relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+				print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+				break
+			}		
+		}
+	}else if (findingWay==3) {
+		flagfinded = 0
+		for (idxDend = 0;idxDend<37;idxDend+=2){
+			access shah[0].dend_5[idxDend]
+			if (distance(0.0) <= currDist && distance(1) > currDist){
+				relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+				print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+				flagfinded = 1
+				break
+			}		
+		}
+		if (!flagfinded){
+			for (idxDend = 1;idxDend<37;idxDend+=2){
+				access shah[0].dend_5[idxDend]
+				if (distance(0.0) <= currDist && distance(1) > currDist){
+					relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+					print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+					break
+				}		
+			}
+		}
+	} else if (findingWay==4) {
+		flagfinded = 0
+		for (idxDend = 1;idxDend<37;idxDend+=2){
+			access shah[0].dend_5[idxDend]
+			if (distance(0.0) <= currDist && distance(1) > currDist){
+				relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+				print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+				flagfinded = 1
+				break
+			}		
+		}
+		if (!flagfinded){
+			for (idxDend = 0;idxDend<37;idxDend+=2){
+				access shah[0].dend_5[idxDend]
+				if (distance(0.0) <= currDist && distance(1) > currDist){
+					relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+					print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+					break
+				}		
+			}
+		}
+	}else if (findingWay==5) {
+		flagfinded = 0
+		for (idxDend = 36;idxDend>=0;idxDend-=2){
+			access shah[0].dend_5[idxDend]
+			if (distance(0.0) <= currDist && distance(1) > currDist){
+				relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+				print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+				flagfinded = 1
+				break
+			}		
+		}
+		if (!flagfinded){
+			for (idxDend = 35;idxDend>=0;idxDend-=2){
+				access shah[0].dend_5[idxDend]
+				if (distance(0.0) <= currDist && distance(1) > currDist){
+					relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+					print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+					break
+				}		
+			}
+		}
+	}else if (findingWay==6) {
+		flagfinded = 0
+		for (idxDend = 35;idxDend>=0;idxDend-=2){
+			access shah[0].dend_5[idxDend]
+			if (distance(0.0) <= currDist && distance(1) > currDist){
+				relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+				print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+				flagfinded = 1
+				break
+			}		
+		}
+		if (!flagfinded){
+			for (idxDend = 36;idxDend>=0;idxDend-=2){
+				access shah[0].dend_5[idxDend]
+				if (distance(0.0) <= currDist && distance(1) > currDist){
+					relativeDist= (currDist-distance(0.0))/(distance(1)-distance(0))
+					print currDist, " => [", idxDend,"] ", relativeDist, distance(relativeDist)
+					break
+				}		
+			}
+		}
+	}
+	findingWay = findingWay + 1
+	if (findingWay ==7){
+		findingWay = 1
+	}
+	// --------------
+	griddata_v_list.o(idxGridInput-1).sub(minTstop)
+
+	vs = new VecStim()
+	vs.src(griddata_v_list.o(idxGridInput-1))
+	vs.start = 1000 // [ms] delay
+	griddata_vs_list.append(vs)
+
+
+	shah[0].dend_5[idxDend] syn = new ExpSyn(relativeDist)
+
+	syn.tau = param_synTau
+	syn.e = 0
+	shah[0].sg.point_mark(syn,2)
+	nc= new NetCon(vs, syn)
+	nc.threshold = 0
+	nc.weight = param_synWeight // 0.00063 //0.00009 //
+
+	griddata_nc_list.append(nc)
+	griddata_syn_list.append(syn)
+
+ }
+
+/************************************
+	   Experiment Load
+*************************************/
+load_file("rintest.hoc")
+testCell = shah[0]
+
+cvode_active(0)
+
+objref pp
+pp = ExpCon.loadExp("PhasePrecession")				// Phase Precession Experiment
+
+// Ramp, Osc, Bias, Holding, Noise (Temp)
+Ramp = 0.000
+
+// for EPSP summation simulation
+Osc = param_osc * param_FlagPP
+Bias = param_bias * param_FlagPP
+Holding = param_holding * param_FlagPP
+Noise = param_noise // * param_FlagPP// 0.1
+// ---------------
+
+pp.setParam("Control", Ramp, Osc, Bias, Holding, Noise, param_phase)
+objref wm
+wm = new PWManager()
+wm.hide(wm.count()-1)
+print "----------Now EXP ID = ", ExpCon.getExpID()
+
+// File Move for Grid - Place Analysis
+strdef dest, fpName2
+
+if (param_FlagPP == 0 ) { // EPSP
+	sprint(dest, "%s/EPSP",param_outputfolder)	
+} else { // PP
+	sprint(dest, "%s/ppData",param_outputfolder)
+}
+pp.setDataPath(dest)
+
+dt = 0.1
+
+// automatic fitting average firing rate ~ 2.5Hz
+objref expCell
+expCell = CellCon.o(0).o(0)
+objref apc
+expCell.soma apc = new APCount(0.5)
+apc.n = 0
+
+pp.setParam("Control", Ramp, Osc, Bias, Holding, Noise, param_phase)
+
+if (param_tstop > 0) {
+ 	pp.setSimDur(param_tstop) 			// set simulation duration to input length
+ } else{
+	pp.setSimDur(maxTstop) 			// set simulation duration to input length
+ }
+ pp.run_pp()

@@ -1,0 +1,32 @@
+// 1 compartment Basket cell (soma only) 
+
+begintemplate icell
+public soma, nclist // give access to soma 
+
+create soma
+objectvar nclist
+
+proc init() {
+
+	nsoma = 1
+	
+create soma
+
+nclist = new List()
+
+
+    soma {
+      nseg = 1
+	diam = 18.8 // [um]
+	L = 18.8 // length [um]
+	Ra = 123.0 // axial resistance [ohm/cm ]
+      insert hhbsk
+		ena = 55 //[mV]
+		ek = -90 //[mV]
+
+    }
+
+
+}
+
+endtemplate icell

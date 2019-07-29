@@ -1,0 +1,20 @@
+load_file("./Shah/shah_invivo_mult_syn.hoc")		// Load Cell Template
+
+
+objref cells, nclist
+objref gidvec  
+
+//////////////////////////////////
+// Step 1: Define the cell classes
+//////////////////////////////////
+
+objref CellCon			
+CellCon = new CellControl()				// Load Cell Controller
+lib.setCellCon(CellCon)					// Set Cell Controller as main controller
+
+CellCon.setDesc("HH cell")				// Cell Description
+CellCon.setSave(lib.true)				// Record the simulated data
+
+n0 = CellCon.append("shah","shah",1)	// Make Cell
+
+CellCon.mornitor()						// Load cell activitiy mornitor

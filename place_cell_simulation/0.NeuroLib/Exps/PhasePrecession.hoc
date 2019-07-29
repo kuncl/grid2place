@@ -1,0 +1,867 @@
+// -------------------------------------
+// Phase Precession Experiment Protocol
+// -------------------------------------
+//  Author : Hyun Jae Jang 
+//  Email  : hjang@ncl.korea.ac.kr
+//  Date   : 25 Feb 2014
+// -------------------------------------
+	
+begintemplate PhasePrecession
+	external lib
+	external my_run, tstop
+	external graphList
+	external MyGraph
+	external CellCon
+	external ExpCon
+	objref this
+
+	strdef datapath
+	strdef cond
+	objref expCell
+	strdef LOG_TAG
+	public stimdur
+	public bool_useGood
+	proc init() {
+		LOG_TAG = "PhasePrecession"
+		lib.printsys("Phase Precession")
+		
+		stimdel = 1000 //ms
+		stimdur = 10000 // ms
+		
+		oscfreq = 10
+		oscphase = 40
+		
+		rampskew = 0.8	// Positive / Negative skew default = 0.8
+		
+		noise_use = lib.true
+		
+		sim_repeat = 8
+		sim_idx = 0
+		
+		bool_useGood = lib.false
+		bool_plotall = lib.true
+		
+		datapath = "./data/pp/"
+		menu()
+		
+	}
+	public setDataPath
+	proc setDataPath() {
+		sprint(datapath, $s1)
+	}
+	public setParam
+	proc setParam() {
+		sprint(cond,$s1)
+		
+		rampamp = $2
+		oscamp = $3
+		bias_amp = $4
+		holding_amp = $5
+		noise_amp = $6
+		oscphase = $7
+	}
+	public setSimDur
+	proc setSimDur() {
+		stimdur = $1
+		tstop= stimdel+stimdur+stimdel
+		print "tstop is changed to ", tstop, " ms"
+	}
+	public getSimDur
+	func getSimDur() {
+		return stimdur
+	}
+	public getSimTstop
+	func getSimTstop() {
+		return stimdel+stimdur+stimdel
+	}
+	objref vb,hb,grp
+	proc menu() { 
+		tstop= stimdel+stimdur+stimdel
+		hb = new HBox(2) 
+		hb.intercept(1)
+			vb = new VBox(2)
+			vb.intercept(1)
+				xpanel("Exp",0)
+
+					xlabel("Stim Protocol")
+					xpvalue("Stim Delay (ms)", &stimdel)
+					xpvalue("Stim Duration (ms)", &stimdur)
+					xpvalue("Osc. Frequency (Hz)", &oscfreq)			
+					xpvalue("Osc. Amplitude (uS)", &oscamp)			
+					xpvalue("Osc. Phase (degree)", &oscphase)			
+					xpvalue("Ramp Amplitude (uS)", &rampamp)			
+					xpvalue("Ramp Skewness", &rampskew)			
+					
+				xpanel()
+				xpanel("Noise",0)
+
+					xlabel("Noise Protocol")
+					xcheckbox("Use Noise", &noise_use)										
+					xpvalue("Stim Delay (ms)", &stimdel)
+					xpvalue("Noise Amplitude (pA)", &noise_amp)
+					xpvalue("Bias Amplitude (pA)", &bias_amp)
+					xpvalue("Holding Amplitude (pA)", &holding_amp)
+					
+				xpanel()
+				
+				xpanel("Params",0) 
+					xpvalue("Simulation Index", &sim_idx)
+					xpvalue("Repeat Number", &sim_repeat)
+					xcheckbox("Plot All", &bool_plotall)
+					xcheckbox("Use Only Good", &bool_useGood)
+				xpanel()
+				xpanel("",0)
+					xbutton("Run","run_pp()")
+					xbutton("Run Repeat","pp_gui() rep_sim()")
+					xbutton("Export_Data","export_data()")
+					xbutton("Close","hb.unmap()")
+					xbutton("Quit","quit()")
+				xpanel()
+			vb.intercept(0)
+			vb.map("Step Protocol",0,0,200,550)
+			
+			vb = new VBox()
+			vb.intercept(1)
+				xpanel("FF")
+					xlabel("Cells")
+					CellCon.browser()
+				xpanel()
+			vb.intercept(0)
+			vb.map("Step Protocol",0,0,100,250)
+			
+			vb = new VBox()
+			vb.intercept(1)
+				grp = new MyGraph()
+				graphList[0].append(grp.g)				
+			vb.intercept(0)
+			vb.map("Step Protocol",0,0,500,600)		
+		hb.intercept(0)
+		hb.map("Phase Precession")
+	}
+	objref morn_vb, oscg, osci, rampg, rampi, toti,noisei
+	proc morn_gui() {
+		morn_vb = new VBox() 
+		morn_vb.intercept(1)
+			oscg = new MyGraph()
+			oscg.live()
+			oscg.title("Oscillatory Conductance")
+			osci = new MyGraph()
+			osci.live()
+			osci.title("Oscillatory Current (nA)")
+			rampg = new MyGraph()
+			rampg.live()
+			rampg.title("Ramp Conductance")
+			rampi = new MyGraph()
+			rampi.live()
+			rampi.title("Ramp Current (nA)")			
+			toti = new MyGraph()		
+			toti.live()
+			toti.title("Total Current (nA)")
+			noisei = new MyGraph()
+			noisei.live()
+			noisei.title("Noise Current (nA)")						
+		morn_vb.intercept(0)
+		// morn_vb.map("Traces",50,50,300, 900) ////
+	}
+	objref apc_v
+	
+	objref pp_vb
+	objref pp_p_g, pp_r_g, pp_p1,pp_p2,pp_r1,pp_r2
+	
+	proc pp_gui() {		localobj wm
+
+		pp_p_g = pp_p1
+		pp_r_g = pp_r1
+
+		tstop= stimdel+stimdur+stimdel
+
+		pp_vb = new VBox()
+		pp_vb.intercept(1)
+			vb = new VBox()
+			vb.intercept(1) 
+				pp_p_g = new MyGraph()
+				pp_p_g.g.exec_menu("Keep Lines")
+				pp_p_g.g.size(0,tstop,0,720)
+				pp_p_g.g.yaxis(3)
+				pp_p_g.g.xaxis(0, tstop,0,5)
+				pp_p_g.g.yaxis(0, 720, 0, 8)
+				
+// division line of time-phase plot 
+				pp_p_g.g.beginline(1,6)
+				pp_p_g.g.line(0,360)
+				pp_p_g.g.line(tstop,360)
+				pp_p_g.title("Time-Phase Plot")
+				
+			vb.intercept(0)
+			vb.map("f",0,0,300,450)
+			
+			vb = new VBox()
+			vb.intercept(1) 
+				pp_r_g = new MyGraph()
+				pp_r_g.g.exec_menu("Keep Lines")
+
+				pp_r_g.g.size(0,tstop,0,50)
+				pp_r_g.g.xaxis(3)
+				pp_r_g.g.yaxis(3)
+				pp_r_g.g.xaxis(0, tstop,0,5)
+				pp_r_g.g.yaxis(0, 50, 0, 5)
+				pp_r_g.title("Time-Rate Plot")
+			vb.intercept(0)
+			vb.map("f",0,0,300,200)			
+		pp_vb.intercept(0)
+		pp_vb.map()
+		wm = new PWManager()
+		wm.hide(wm.count()-1)
+	}
+	
+	objref phase_v, phase_vx, phase_v2, phase_vx2, rate_v,rate_vx
+	proc pp_analysis() { local tbin,period,ratebin localobj apidx, phaseidx, v1, vb
+		period = 1000 / oscfreq
+		phase_v = new Vector()
+		phase_vx = new Vector()		
+		phase_v2 = new Vector()
+		phase_vx2 = new Vector()
+		
+		apidx = new Vector()
+		phaseidx = new Vector()
+		for (tbin = period*(( oscphase / 360) -1 ); tbin < tstop;tbin+=period){			
+			apidx.where(apc_v, "[)",tbin, tbin+period)
+			phaseidx = apidx.c.sub(tbin).mul(360 / period )		
+			
+
+			if (apidx.size()>0){
+				// All spike				
+				phase_v.append(phaseidx)
+				phase_vx.append(apidx)			
+				// 1st spike
+				phase_v2.append(phaseidx.x(0))
+				phase_vx2.append(apidx.x(0))
+			}
+
+		}
+		apidx.where(apc_v, "[)",tbin-period, tbin)
+		phaseidx = apidx.c.sub(tbin).mul(360 / period )
+		
+		if (apidx.size()>0){
+			// All spike		
+			phase_v.append(phaseidx)
+			phase_vx.append(apidx)
+			// 1st spike
+			phase_v2.append(phaseidx.x(0))
+			phase_vx2.append(apidx.x(0))
+		}
+		
+		ratebin = (tstop/15)
+		rate_v = new Vector()
+		rate_vx = new Vector()
+		for (tbin = 0; tbin< tstop;tbin += ratebin) {
+			apidx.where(apc_v, "[)",tbin,tbin+ratebin)
+			rate_v.append( ( apidx.size() / ratebin )*1000)
+			rate_vx.append(tbin + ratebin/2)
+			
+		}
+		apidx.where(apc_v, "[)",tbin-ratebin,tbin)
+		rate_v.append(( apidx.size() / ratebin ) * 1000 )
+		rate_vx.append(tbin - ratebin/2)
+		
+		phase_v2.mark(pp_p_g.g,phase_vx2,"O",3,2,1)
+		phase_v2.c.add(360).mark(pp_p_g.g,phase_vx2,"O",3,2,1)
+		
+		if (bool_plotall) {		
+			phase_v.mark(pp_p_g.g,phase_vx,"O",3,3,1)
+			phase_v.c.add(360).mark(pp_p_g.g,phase_vx,"O",3,3,1)		
+		}
+		
+		rate_v.mark(pp_r_g.g,rate_vx,"O",3,1,1)
+		rate_v.line(pp_r_g.g,rate_vx,1,1)
+	}
+	objref vc, epsc_g ///////////////////// unitary EPSC
+	external param_repeat
+	proc pp_body() {	local i localobj stim, cell,apc, fi_x,fi_y, wnoise, r, holding_ic
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			expCell = CellCon.o(0).o(0)
+			// break
+		} else{
+			expCell = CellCon.browser_selected()
+		}
+		
+		grp.g.erase_all()
+
+		//r = new RandomStream()
+		
+		// expCell.soma vc = new VClamp(0.5) /////////////////////  EPSC at soma
+		// vc.dur[0] = 2000 /////////////////////  EPSC at soma
+		// vc.amp[0] = -80  /////////////////////  EPSC at soma
+		
+		// epsc_g = new Graph() /////////////////////  EPSC at soma
+		// epsc_g.addvar("EPSC at soma", &vc.i) /////////////////////  EPSC at soma
+		// epsc_g.size(750, 1500, -0.15, -0.175) /////////////////////  EPSC at soma
+		// graphList[0].append(epsc_g)   /////////////////////  EPSC at soma
+
+		expCell.soma stim = new SinOsc(0.5)
+		stim.del = stimdel
+		stim.dur = stimdur
+		stim.freq = oscfreq
+		stim.gsinbar = oscamp
+		stim.sinphase = oscphase
+		stim.esin = -70
+
+		stim.eramp = 0
+		stim.grampbar = rampamp
+		stim.ramppos = rampskew
+		
+		stim.bias = bias_amp
+		if(noise_use) { stim.noise = noise_amp }
+		// stim.seed(r.newseed())
+		stim.seed(param_repeat)
+		
+		tstop= stimdel+stimdur+stimdel
+
+
+		apc_v = new Vector()
+		expCell.soma apc = new APCount(0.5)
+		apc.n = 0
+		apc.record(apc_v)
+		
+		grp.g.addvar(expCell.desc, &expCell.soma.v(0.5)) ///////////
+		// grp.g.addvar(expCell.desc, &expCell.pre_list.o(0).i) ///////////
+		// grp.g.addvar(expCell.desc, &expCell.dend_5[13].v(0.5)) ///////////
+		
+		grp.g.size(0,tstop,-70,30)
+		// grp.g.size(0,tstop,-70,50)				
+		grp.g.xaxis(3)
+		// grp.g.yaxis(3)
+		grp.g.xaxis(0, tstop,0,7)
+		grp.g.yaxis(-70, 30, 0, 10)	
+
+		holding_ic = lib.nil
+		expCell.soma holding_ic = new IClamp(0.5)
+		holding_ic.del = 0
+		holding_ic.dur = tstop
+		holding_ic.amp = holding_amp
+		
+		
+		morn_gui()
+		oscg.g.addvar("g", &stim.sing)
+		oscg.size(0,tstop,-stim.gsinbar,stim.gsinbar)
+		osci.g.addvar("i", &stim.sini)		
+		osci.size(0,tstop,-0.1,0.1)		
+		
+		rampg.g.addvar("g", &stim.rampg)
+		rampg.size(0,tstop, -stim.grampbar,stim.grampbar)
+		
+		rampi.g.addvar("i", &stim.rampi)
+		rampi.size(0,tstop, -0.1,0.1)
+		
+		toti.g.addvar("i", &stim.i)
+		toti.size(0,tstop,-0.3,0.3)
+		
+
+		noisei.g.addvar("i", &stim.noisei)
+		noisei.size(0,tstop,-noise_amp,noise_amp)
+		
+		pp_datainit()
+		pp_dataadd("t", &t)
+		pp_dataadd("sing", &stim.sing)
+		pp_dataadd("sini", &stim.sini)
+		pp_dataadd("rampg", &stim.rampg)
+		pp_dataadd("rampi", &stim.rampi)
+		pp_dataadd("toti", &stim.i)
+		pp_dataadd("noisei", &stim.noisei)
+		pp_dataadd("somav", &expCell.soma.v(0.5))
+		//pp_dataadd("distalEPSC", &expCell.pre_list.o(0).i)
+		pp_dataadd("gM", &expCell.soma.gm_km(0.5))
+		// pp_dataadd("gMm", &expCell.soma.m_km(0.5))
+
+		my_run()
+		
+		pp_analysis()
+		pp_datasave()
+				
+		stim = lib.nil
+		wnoise = lib.nil
+		holding_ic = lib.nil
+	}
+	objref recdic
+	proc pp_datainit() {
+		recdic = new Dictionary()
+	}
+	proc pp_dataadd() { localobj vv, target
+		vv = new Vector()
+		vv.record(&$&2)
+		recdic.put($s1,vv)
+	}
+
+	strdef s, msname
+	
+	public pp_val
+	proc pp_datasave() { local i,j,k,p localobj fp, cell, ms, mt, pp
+		
+		sprint(lib.cmd,"%s/pp_%d",datapath, ExpCon.getExpID())
+		lib.mkdir(lib.cmd)
+
+		sprint(lib.string,"%s/pp_%d/pp_%d_%s_data_%d.dat",datapath, ExpCon.getExpID(),ExpCon.getExpID(),cond,sim_idx)
+		recdic.dump(lib.string)
+
+		// Dump Cell Parameters
+		fp = new File()
+		sprint(lib.string,"%s/pp_%d/pp_%d_%s_params.txt",datapath, ExpCon.getExpID(),ExpCon.getExpID(),cond)		
+		fp.wopen(lib.string)
+		
+		access expCell.soma
+		pp_val = 0 
+		for p = 0,1 {
+			mt = new MechanismType(p)
+			for i=0, mt.count-1 {
+				mt.select(i)
+				mt.selected(msname)
+				if (ismembrane(msname)) {
+					ms = new MechanismStandard(msname, 1)
+						
+					if (p==0) {
+						fp.printf("//--------------------\r\n" )
+						fp.printf("// %s \r\n" ,msname)
+						fp.printf("//--------------------\r\n" )
+						
+						for j=0, ms.count()-1 {
+							k = ms.name(s, j)
+							strdef tempstr
+							sprint(tempstr,"%s.pp_val = %s.soma.%s(0.5)",this,expCell, s)
+							execute1(tempstr)
+							fp.printf("\t%s = %f \r\n", s,pp_val)
+						}
+					} else {
+						for (pp = mt.pp_begin(); object_id(pp) != 0; pp = mt.pp_next()) {
+							fp.printf("//--------------------\r\n" )
+							fp.printf("// %s \r\n" ,pp)
+							fp.printf("//--------------------\r\n" )
+							for j=0, ms.count()-1 {
+								k = ms.name(s, j)
+								strdef tempstr
+								sprint(tempstr,"%s.pp_val = %s.%s",this,pp, s)
+								execute1(tempstr)
+								fp.printf("\t%s = %f \r\n", s,pp_val)
+							}
+
+						}
+					}
+					
+				}
+			}		
+		}
+		fp.close()
+	}
+	
+	public run_pp
+	proc run_pp() { local linm, linb  localobj meanPhase
+		pp_gui() 
+		pp_body()
+	
+	
+		// meanPhase = meanCalc(phase_vx,phase_v)
+		
+		// meanPhase.getcol(1).mark(pp_p_g.g,meanPhase.getcol(0),"O",6,1,1)
+		// meanPhase.getcol(1).line(pp_p_g.g,meanPhase.getcol(0),1,3)
+	}
+	func deg2rad() {
+		return $1 * (PI / 180)
+	}
+	func rad2deg() {
+		return $1 * (180/PI)
+	}
+	func calc_mean() {local i localobj angles, cosvec, sinvec
+		angles = $o1
+		cosvec = new Vector()
+		sinvec = new Vector()
+		for (i=0;i<angles.size();i+=1) {
+			cosvec.append(cos(deg2rad(angles.x(i))))
+			sinvec.append(sin(deg2rad(angles.x(i))))
+		}
+		return rad2deg(atan(sinvec.mean() / cosvec.mean()))
+	}
+	obfunc meanCalc() { local bin_num, tbin, i localobj phase_x, phase_y, meanPhaseX,meanPhaseY,tempVecX,tempVecY, meanPhase
+		bin_num = 5
+		phase_x = $o1
+		phase_y = $o2
+		
+		meanPhaseX = new Vector()
+		meanPhaseY = new Vector()
+		for (tbin = stimdel; tbin<stimdel+stimdur;tbin+= stimdur / bin_num ) {
+			meanPhaseX.append(tbin + (stimdur/bin_num)/2)
+			tempVecX = new Vector()
+			tempVecY = new Vector()
+			tempVecX = phase_x.c.indvwhere(phase_x,"[)", tbin, tbin+stimdur/bin_num)
+			for (i = 0;i<tempVecX.size();i+=1) {
+				tempVecY.append(phase_y.x(tempVecX.x(i)))
+			}
+			meanPhaseY.append(lib.Math.circ_mean(tempVecY))
+		}		
+		meanPhase = new Matrix(bin_num,2)  // X, Y
+		meanPhase.setcol(0,meanPhaseX)
+		meanPhase.setcol(1,meanPhaseY)
+		return meanPhase		
+	}
+	
+	func goodtest() { local linm, linb, firstx,firsty, lastx, lasty	localobj phase_x, phase_y, rate_x, rate_y, meanPhase,meanPhaseX,meanPhaseY
+		phase_x = $o1
+		phase_y = $o2
+		rate_x = $o3
+		rate_y = $o4 
+		
+		linm = linb = 0
+		// if (bool_plotall) {
+			lib.math.linfit(phase_x,phase_y,&linm,&linb)
+			firstx = phase_x.x(0)
+			lastx = phase_x.x(phase_x.size()-1)
+		// } 
+		
+		lasty = (lastx * linm + linb)
+		firsty = (firstx * linm + linb)
+
+		meanPhase = meanCalc(phase_vx,phase_v)
+		meanPhaseX = meanPhase.getcol(0)
+		meanPhaseY = meanPhase.getcol(1)
+		
+		lib.Log.log_v(LOG_TAG, "goodtest: linm = %f / firsty = %f / lasty = %f", linm, firsty, lasty)
+		// if (linm < -0.025 && firsty > 230 && lasty < 130) {
+			// if ( ((rate_y.x(5) > 0 || rate_y.x(4) > 0)  ) && rate_y.max() < 10){		
+		// if (meanPhaseY.x(0) > 240 && meanPhaseY.min() < 100) {	// for control
+		// if (firsty < lasty && abs(linm) < 0.01 && (190>meanPhaseY.x(0) && meanPhaseY.x(0)>170) && (190>meanPhaseY.x(1) && meanPhaseY.x(1)>170) && (190>meanPhaseY.x(2) && meanPhaseY.x(2)>170) && (190>meanPhaseY.x(3) && meanPhaseY.x(3)>170) && (190>meanPhaseY.x(4) && meanPhaseY.x(4)>170)  ) {	// for XE991
+		// if (firsty < lasty && abs(linm) < 0.007 && 180>meanPhaseY.x(0)   ) {	// for XE991
+		// if (firsty < lasty && abs(linm) < 0.007 && 180>meanPhaseY.x(0)   ) {	// for XE991
+		
+		cntLower= 0 
+		for (i=0;i<phase_y.size();i+=1){
+			if (phase_y.x(i) < 70) {
+				cntLower = cntLower + 1
+			}
+		}
+		if (cntLower >= 0 && meanPhaseY.x(0) > 250 && meanPhaseY.x(3) < 150) {	// for control
+		// if (cntLower > 2 && meanPhaseY.x(0) > 250 ) {	// for control
+			// if ( ((rate_y.x(3) > 0 || rate_y.x(4) > 0) ) && rate_y.max() < 11){
+			if ( ((rate_y.x(3) > 0) ) && rate_y.max() < 11){
+				return lib.true
+			}
+			lib.Log.log_i(LOG_TAG, "Precession Test Not Passed / Rate  %f, %f, %f",rate_y.x(3), rate_y.x(4),rate_y.max())		
+			
+		} 
+		lib.Log.log_i(LOG_TAG, "Precession Test Not Passed / Phase first %f, second %f, min %f, Lower cnt %d",meanPhaseY.x(0),meanPhaseY.x(1), meanPhaseY.min(), cntLower)		
+		
+		return lib.false
+	}
+	proc rep_sim() { local linm, linb, sim_cnt localobj xdat,ydat, xdat2,ydat2
+		xdat = new Vector()
+		ydat = new Vector()		
+		xdat2 = new Vector()
+		ydat2 = new Vector()
+		
+		sprint(lib.cmd,"./data/pp/pp_%d",ExpCon.getExpID())
+		lib.mkdir(lib.cmd)
+		
+		sim_cnt = 0
+		for (sim_idx = 0;sim_idx<sim_repeat;sim_idx+=1){
+			sim_cnt = sim_cnt+1
+			lib.Log.log_i(LOG_TAG, "rep_sim:phase precession simulation (%d,%d / %d)", sim_idx+1, sim_cnt, sim_repeat)
+			
+			
+			// Init Phase Graph with stacked data 
+			// It is initialized before simulation for checking just previous simulation
+			pp_p_g.g.erase_all() 						
+			pp_p_g.g.beginline(1,6)
+			pp_p_g.g.line(0,360)
+			pp_p_g.g.line(tstop,360)
+			pp_p_g.title("Time-Phase Plot")
+
+			
+			ydat2.mark(pp_p_g.g,xdat2,"O",3,2,1)
+			ydat2.c.add(360).mark(pp_p_g.g,xdat2,"O",3,2,1)
+			if (bool_plotall) {		
+				ydat.mark(pp_p_g.g,xdat,"O",3,3,1)
+				ydat.c.add(360).mark(pp_p_g.g,xdat,"O",3,3,1)
+			}
+				
+			
+			pp_body()
+			
+			if ( !bool_useGood || (bool_useGood && goodtest(phase_vx,phase_v,rate_vx, rate_v)) ) {			
+				xdat.append(phase_vx)
+				ydat.append(phase_v)			
+				xdat2.append(phase_vx2)
+				ydat2.append(phase_v2)		
+				
+				sprint(lib.cmd,"./data/pp/pp_%d/%s_trace_%d",ExpCon.getExpID(),cond,sim_idx)
+				grp.printjpg(lib.cmd)
+				
+				
+			}else {
+				
+				sim_idx -= 1
+				
+			}
+		}
+
+		linm = linb = 0
+		
+		if (bool_plotall) { 		
+			lib.math.linfit(xdat,ydat,&linm,&linb)
+			lib.math.linfit_g(pp_p_g.g,xdat,linm,linb,3)
+		} else {
+			lib.math.linfit(xdat2,ydat2,&linm,&linb)
+			lib.math.linfit_g(pp_p_g.g,xdat2,linm,linb,2)
+		}
+
+		sprint(lib.cmd,"./data/pp/pp_%d/%s_phase",ExpCon.getExpID(),cond)
+		pp_p_g.printjpg(lib.cmd)				
+		sprint(lib.cmd,"./data/pp/pp_%d/%s_ramp",ExpCon.getExpID(),cond)
+		pp_r_g.printjpg(lib.cmd)
+		
+		print "oscamp, 	rampamp ,  bias_amp , linm"
+		print oscamp, 	rampamp ,  bias_amp , linm
+
+	}
+	
+	
+	proc export_data() {local simcnt localobj xdat, ydat
+		
+
+		sprint(lib.cmd,"./data/pp/pp_%d",ExpCon.getExpID())
+		lib.mkdir(lib.cmd)
+		simcnt = 0
+		for (sim_idx = 0;sim_idx<sim_repeat;sim_idx+=1){
+			pp_gui()
+			simcnt = simcnt+1
+			lib.Log.log_i(LOG_TAG, "export_data:Simulation (%d) Start", simcnt)
+			
+			pp_body()
+			
+			if ( !bool_useGood || (bool_useGood && goodtest(phase_vx,phase_v,rate_vx, rate_v)) ) {			
+			
+				sprint(lib.cmd,"./data/pp/pp_%d/pp_%d_%s_trace_%d",ExpCon.getExpID(),ExpCon.getExpID(),cond,sim_idx)
+				grp.printjpg(lib.cmd)
+
+
+				xdat = new Vector()
+				ydat = new Vector()		
+			
+				xdat.append(phase_vx)
+				ydat.append(phase_v)
+				
+				
+				linm = linb = 0			
+				lib.math.linfit(xdat,ydat,&linm,&linb)
+				lib.math.linfit_g(pp_p_g.g,xdat,linm,linb,3)
+			
+				sprint(lib.cmd,"./data/pp/pp_%d/pp_%d_%s_phase_%d",ExpCon.getExpID(),ExpCon.getExpID(),cond,sim_idx)
+				pp_p_g.printjpg(lib.cmd)				
+
+				sprint(lib.cmd,"./data/pp/pp_%d/pp_%d_%s_ramp_%d",ExpCon.getExpID(),ExpCon.getExpID(),cond,sim_idx)
+				pp_r_g.printjpg(lib.cmd)
+				
+				
+			}else {
+				
+				sim_idx -= 1
+				
+			}
+		}
+	}
+	
+	proc pp_datasave2() { local i,j,k,p,eid,sid localobj fp, cell, ms, mt, pp
+		strdef outdir
+		sprint(outdir, $s1)
+		eid = $2
+		sid = $3
+		
+		sprint(lib.string,"./%s/pp_%d_data_%d.dat",outdir,eid,sid)
+		recdic.dump(lib.string)
+
+		//Dump Cell Parameters
+		fp = new File()
+		sprint(lib.string,"./%s/pp_%d_param_%d.dat",outdir,eid,sid)
+		fp.wopen(lib.string)
+		
+		access expCell.soma
+		pp_val = 0 
+		for p = 0,1 {
+			mt = new MechanismType(p)
+			for i=0, mt.count-1 {
+				mt.select(i)
+				mt.selected(msname)
+				if (ismembrane(msname)) {
+					ms = new MechanismStandard(msname, 1)
+						
+					if (p==0) {
+						fp.printf("//--------------------\r\n" )
+						fp.printf("// %s \r\n" ,msname)
+						fp.printf("//--------------------\r\n" )
+						
+						for j=0, ms.count()-1 {
+							k = ms.name(s, j)
+							strdef tempstr
+							sprint(tempstr,"%s.pp_val = %s.soma.%s(0.5)",this,expCell, s)
+							execute1(tempstr)
+							fp.printf("\t%s = %f \r\n", s,pp_val)
+						}
+					} else {
+						for (pp = mt.pp_begin(); object_id(pp) != 0; pp = mt.pp_next()) {
+							fp.printf("//--------------------\r\n" )
+							fp.printf("// %s \r\n" ,pp)
+							fp.printf("//--------------------\r\n" )
+							for j=0, ms.count()-1 {
+								k = ms.name(s, j)
+								strdef tempstr
+								sprint(tempstr,"%s.pp_val = %s.%s",this,pp, s)
+								execute1(tempstr)
+								fp.printf("\t%s = %f \r\n", s,pp_val)
+							}
+
+						}
+					}
+					
+				}
+			}		
+		}
+		fp.close()
+	}
+	
+	proc pp_body2() {	local i localobj stim, cell,apc, fi_x,fi_y, wnoise, r, holding_ic
+		strdef outdir
+		sprint(outdir, $s1)
+		eid = $2
+		sid = $3
+		
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			expCell = CellCon.browser_selected()
+		}
+		
+		grp.g.erase_all()
+		
+		r = new RandomStream()
+
+		expCell.soma stim = new SinOsc(0.5)
+		stim.del = stimdel
+		stim.dur = stimdur
+		stim.freq = oscfreq
+		stim.gsinbar = oscamp
+		stim.sinphase = oscphase
+		stim.esin = -70
+		
+		stim.eramp = 0
+		stim.grampbar = rampamp
+		stim.ramppos = rampskew
+		
+		stim.bias = bias_amp
+		if(noise_use) { stim.noise = noise_amp }
+		stim.seed(r.newseed())
+		
+		tstop= stimdel+stimdur+stimdel
+			
+		apc_v = new Vector()
+		expCell.soma apc = new APCount(0.5)
+		apc.n = 0
+		apc.record(apc_v)
+		
+		grp.g.addvar(expCell.desc, &expCell.soma.v(0.5))
+		grp.g.size(0,tstop,-60,30)
+		
+
+		holding_ic = lib.nil
+		expCell.soma holding_ic = new IClamp(0.5)
+		holding_ic.del = 0
+		holding_ic.dur = tstop
+		holding_ic.amp = holding_amp
+		
+		
+		
+						// morn_gui()
+						// mornv.g.addvar("v", &expCell.soma.v(0.5))
+						// mornv.size(0,tstop,-stim.gsinbar,stim.gsinbar)
+						// oscg.g.addvar("g", &stim.sing)
+						// oscg.size(0,tstop,-stim.gsinbar,stim.gsinbar)
+						// osci.g.addvar("i", &stim.sini)		
+						// osci.size(0,tstop,-0.1,0.1)		
+					
+		
+		
+		
+		pp_datainit()
+		pp_dataadd("t", &t)
+		pp_dataadd("sing", &stim.sing)
+		pp_dataadd("sini", &stim.sini)
+		pp_dataadd("rampg", &stim.rampg)
+		pp_dataadd("rampi", &stim.rampi)
+		pp_dataadd("toti", &stim.i)
+		pp_dataadd("noisei", &stim.noisei)
+		pp_dataadd("somav", &expCell.soma.v(0.5))
+		pp_dataadd("gM", &expCell.soma.gm_km(0.5))
+		pp_dataadd("gMm", &expCell.soma.m_km(0.5))
+		
+		my_run()
+		
+		pp_analysis()
+		pp_datasave2(outdir,eid,sid)
+				
+		stim = lib.nil
+		wnoise = lib.nil
+		holding_ic = lib.nil
+	}
+	public goodExport
+	proc goodExport() {local simcnt, eid, sid localobj xdat, ydat, vv, fp, pwm
+		strdef outdir
+		sprint(outdir, $s1)
+		eid = $2
+		sid = $3
+		
+		sprint(filename,$s4)
+		
+		simcnt = 0
+		pwm = new PWManager()
+			pwm.hide(pwm.count()-1)
+		
+		for (sim_idx = 0;sim_idx<1;sim_idx+=1){
+			pp_gui()
+			
+			simcnt = simcnt+1
+			lib.Log.log_i(LOG_TAG, "export_data:Simulation (%d) Start", simcnt)
+			
+			pp_body2(outdir,eid,sid)
+			
+			if ( !bool_useGood || (bool_useGood && goodtest(phase_vx,phase_v,rate_vx, rate_v)) ) {			
+			
+				sprint(lib.cmd,"./%s/pp_%d_trace_%d",outdir,eid,sid)
+				grp.printjpg(lib.cmd)
+
+
+				xdat = new Vector()
+				ydat = new Vector()		
+			
+				xdat.append(phase_vx)
+				ydat.append(phase_v)
+				
+				
+				linm = linb = 0			
+				lib.math.linfit(xdat,ydat,&linm,&linb)
+				lib.math.linfit_g(pp_p_g.g,xdat,linm,linb,3)
+				
+				sprint(lib.cmd,"./%s/pp_%d_phase_%d",outdir,eid,sid)
+				pp_p_g.printjpg(lib.cmd)				
+
+				sprint(lib.cmd,"./%s/pp_%d_ramp_%d",outdir,eid,sid)
+				pp_r_g.printjpg(lib.cmd)
+				
+				
+			}else {
+				
+				sim_idx -= 1
+				
+			}
+		}
+		lib.unlink(filename)
+		quit()
+	}
+	
+endtemplate PhasePrecession

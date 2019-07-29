@@ -1,0 +1,245 @@
+/*************EXAMPLE
+						objref dic
+						dic = new Dictionary()
+						dic.put("aKey", new String("theValue"))
+						dic.put("anotherOne", new Vector())
+						print dic.get("aKey").s
+						// etc., pretty straight-forward
+**************/
+
+
+
+
+// this ensures the String class is available
+load_file("stdlib.hoc")
+
+/**
+* An implementation of a dictionary. Only object references can be used as
+* values, but both object references and strings can be used as keys. Note that
+* the implementation might not be super-fast, but it works :) .
+*
+* Author: Eelke Spaak, Nijmegen, NL
+* Date: 12 nov 2008
+*/
+begintemplate Dictionary
+
+    objref null // null reference
+    objref keys, values, stringTable
+    
+    public put, get, remove, containsKey, size, keyList
+    
+    proc init() {
+        keys = new List()
+        values = new List()
+        stringTable = new List()
+    }
+    
+    /**
+     * Stores the given key/value pair in the dictionary. If key is already
+     * present, changes the stored value to the specified one.
+     *
+     * $o1 or $s1 = the key
+     * $o2 = the value
+     */
+    proc put() { \
+        localobj key, value
+        
+        if (argtype(1) == 2) {
+            key = getString($s1)
+        } else {
+            key = $o1
+        }
+        
+        putImpl(key, $o2)
+    }
+    
+    /**
+     * Returns the value for the given key, or a reference to NULLObject if the
+     * key does not occur in the dictionary.
+     *
+     * $s1 or $o1 = the key
+     */
+    obfunc get() { \
+        localobj key
+        
+        if (argtype(1) == 2) {
+            key = getString($s1)
+        } else if (argtype(1) == 1){
+            key = $o1
+        } else {
+			return values.object($1)
+		}
+        
+        return getImpl(key)
+    }
+	// ---------- 0902 이전 Dump --------
+	// public dump
+	// proc dump() {local i,tic localobj fp, mat
+		// tic = startsw()
+		// fp = new File()
+		// fp.wopen($s1)
+		
+		// if (size() > 0 ){
+			// mat = new Matrix(values.o(0).size(), size())
+			// for (i=0;i<size();i+=1){
+				// fp.printf("%s\t",keys.o(i).s)
+				// mat.setcol(i, values.o(i))
+			// }
+		// }
+		// fp.printf("\r\n")
+		// mat.fprint(0, fp,"%g\t")
+		// fp.close()
+		// print "Dump elapsed time", startsw() - tic, " secs"
+	// }
+	// --------------0902 v2 dump
+	public dump
+	proc dump() {local i,tic localobj fp, fp2, mat, s
+		tic = startsw()
+s = new String()
+		fp = new File()
+		sprint(s.s, "%s2",$s1)
+		fp.wopen(s.s)
+		
+		if (size() > 0 ){	
+			for (i=0;i<size();i+=1){
+				values.o(i).fwrite(fp)
+			}
+		}		
+		fp.close()
+		
+		fp2 = new File()
+		
+		sprint(s.s, "%skey2",$s1)
+		fp2.wopen(s.s)	// KEY VALUE		
+		if (size() > 0 ){
+			fp2.printf("%f\n",values.o(0).size())
+			
+			for (i=0;i<size();i+=1){
+				fp2.printf("%s\n",keys.o(i).s)				
+			}
+		}	
+		fp2.close()
+		
+		print "Dump elapsed time", startsw() - tic, " secs"
+	}
+    /**
+     * Returns the value for the given key, or a reference to NULLObject if the
+     * key does not occur in the dictionary.
+     *
+     * $s1 or $o1 = the key
+     */
+	public getkey
+    obfunc getkey() { \
+		return keys.object($1)        
+    }
+    
+    /**
+     * Removes the key/value pair associated with the given key from the
+     * dictionary.
+     *
+     * $s1 or $o1 = the key
+     */
+    proc remove() { \
+        localobj key
+        
+        if (argtype(1) == 2) {
+            key = getString($s1)
+        } else {
+            key = $o1
+        }
+        
+        removeImpl(key)
+    }
+    
+    /**
+     * Returns 1 if the specified key is present in the dictionary, 0 otherwise.
+     *
+     * $s1 or $o1 = the key
+     */
+    func containsKey() { \
+        localobj key
+        
+        if (argtype(1) == 2) {
+            key = getString($s1)
+        } else {
+            key = $o1
+        }
+        
+        return (getImpl(key) != null)
+    }
+    
+    /**
+     * Returns the number of key/value pairs in the dictionary.
+     */
+    func size() {
+        return keys.count()
+    }
+    
+    /**
+     * Returns a List of all the keys stored in the dictionary.
+     */
+    obfunc keyList() {
+        return keys
+    }
+    
+    // private: returns the appropriate String instance from stringTable
+    obfunc getString() { \
+        local i \
+        localobj s
+        
+        for i = 0, stringTable.count() - 1 {
+            s = stringTable.object(i)
+            if (strcmp(s.s, $s1) == 0) {
+                return s
+            }
+        }
+        
+        s = new String($s1)
+        stringTable.append(s)
+        return s
+    }
+    
+    proc putImpl() { \
+        local ind
+       
+        ind = keys.index($o1)
+        
+        if (ind > -1) {
+            values.remove(ind)
+            values.insrt(ind, $o2)
+        } else {
+            keys.append($o1)
+            values.append($o2)
+        }
+    }
+    
+    obfunc getImpl() { \
+        local ind \
+       
+        ind = keys.index($o1)
+        
+        if (ind < 0) {
+            return null
+        } else {
+            return values.object(ind)
+        }
+    }
+    
+    proc removeImpl() { \
+        local ind
+        
+        ind = keys.index($o1)
+        
+        if (ind > -1) {
+            keys.remove(ind)
+            values.remove(ind)
+        }
+        
+        // clean up stringTable, not necessary but good for tidiness
+        ind = stringTable.index($o1)
+        if (ind > -1) {
+            stringTable.remove(ind)
+        }
+    }
+
+endtemplate Dictionary

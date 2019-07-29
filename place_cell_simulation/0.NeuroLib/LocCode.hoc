@@ -1,0 +1,39 @@
+
+begintemplate LocPoint
+	public init
+	
+	strdef oSec	
+	
+	public iDistance, iPoint
+	
+	proc init (){
+		oSec = $s1
+		iPoint = $2
+		iDistance = $3
+	}
+	proc SetSection() {
+		oSec = $o1
+	}
+	proc SetDistance() {
+		iDistance = $1
+	}	
+	proc SePoint() {
+		iPoint = $1
+	}
+	obfunc GetSection() {
+		return oSec
+	}
+	func GetDistance() {
+		return iDistance
+	}	
+	func GePoint() {
+		return iPoint
+	}
+	
+	
+	proc Exec() { localobj str
+		// str = new StringFunctions()
+		// idx = str.substr($s1 , "%LOC%")
+		// CellName = $s1
+	}
+endtemplate LocPoint

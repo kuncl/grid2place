@@ -1,0 +1,36 @@
+
+
+
+
+load_file("nrngui.hoc")
+
+objref gridraw 
+objectvar griddata 
+
+gridraw = new File ()
+gridraw.ropen("epsp1.txt")
+griddata = new Vector()
+
+while(!gridraw.eof()) { 
+	griddata.append(gridraw.scanvar())
+// griddata= griddata-griddata[0]
+}
+gridraw.close()
+// groddraw.printf
+
+objref gridy 
+gridy = new Vector(griddata.size())
+
+gridy.add(1)
+griddata.sub(griddata.x(0))
+objref g
+g = new Graph()
+gridy.mark(g,griddata, "|")
+g.size(0,2200,0,1)
+
+
+// g.begin()		//The next g.plot command will move the drawing pens
+
+	// g.plot(syn)	
+
+// g.flush()

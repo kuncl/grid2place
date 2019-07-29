@@ -1,0 +1,5 @@
+strdef str
+// system("echo $Tz",str)
+err=system("cmd /c date /t",str)
+err=system("cmd /c time /t",str)
+print str

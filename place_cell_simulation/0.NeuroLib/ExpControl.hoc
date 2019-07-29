@@ -1,0 +1,93 @@
+begintemplate ExpControl
+	external lib
+	
+	public true, false, nil
+	public string, cmd
+	strdef string, cmd
+	objref nil, this
+	
+	objref explist
+	proc init() {
+		true = 1
+		false =0 
+			
+		Exp_ID = 0		
+		
+		explist = new List()
+		
+		// Initialization 
+		//loadExpID()
+		//incExpID()
+		//saveExpID()
+		Exp_ID = $1
+		lib.printsys("Experiment Id = %d ", Exp_ID)
+		
+		gui()
+	}
+	public dumpLog
+	proc dumpLog() { 
+		lib.mkdir("./logs/")
+		strdef temp
+		sprint(temp, "./logs/sim%d_stdlog.log",Exp_ID)
+		hoc_stdout(temp)
+	}
+	objref vb
+	proc gui() {
+		vb = new VBox(2)
+		vb.intercept(1)
+			xpanel("FFF")
+			xpvalue("Experiment ID", &Exp_ID)
+			xpvalue("Simulation Time (ms)", &t)
+			xpvalue("Simulation Temprature", &celsius)
+			xbutton("Quit","quit()")
+			xpanel()
+		vb.intercept(0)
+		vb.map("Experiment Control", 200,200,200,100)
+	}
+	public incExpID
+	proc incExpID() {
+		Exp_ID +=1		
+	}
+	proc saveExpID() { localobj fp
+		//fp = new File()
+		//if (fp.wopen("ExpID.dat") == 1) {
+	//		fp.printf("%d",Exp_ID)
+	//	} else {
+	//		lib.printerr("ExpID.dat File could not be written")
+	//	}
+	//	fp.close()	
+	}
+	func loadExpID() { localobj fp	
+		//fp = new File()
+		//if (fp.ropen("ExpID.dat") == 1) {
+		//	Exp_ID = fp.scanvar()
+		//} else {
+	//		lib.printerr("ExpID.dat File could not be loaded")
+//		}
+//		fp.close()
+		return Exp_ID
+	}
+	public getExpID
+	func getExpID() {
+		return Exp_ID
+	}
+	public setExpID
+	proc setExpID() {
+		Exp_ID = $1
+	}	
+	public getExpList
+	obfunc getExpList(){
+		return explist
+	}
+	public loadExp
+	obfunc loadExp() {
+		sprint(string,"%s/Exps/%s.hoc",lib.libpath,$s1)
+		{load_file(string)}		
+		
+		sprint(string,"%s.getExpList().append(new %s())",this, $s1)
+		execute1(string)
+		
+		lib.printsys("Experiment (%s) successfully loaded",$s1)
+		return explist.o(explist.count()-1)
+	}
+endtemplate ExpControl

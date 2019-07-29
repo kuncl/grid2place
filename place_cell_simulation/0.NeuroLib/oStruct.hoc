@@ -1,0 +1,90 @@
+begintemplate Struct
+	external lib
+    objref null // null reference
+    objref keys, values
+    	
+    proc init() {
+        keys = new List()
+        values = new Vector()
+		count = 0
+    }
+    public append
+	proc append() {
+		// $s1 : key
+		// $2 : value
+		keys.append(new myString($s1))
+		values.append($2)
+		
+		count = count+1
+	}
+	public get
+	func get() {local index
+		// $s1 / $1 : key
+        if (argtype(1) == 2) {
+            index = getIndex($s1)		
+        } else {
+			if ($1 < count -1 ) {
+				index = $1
+			} else {
+				index = -1
+			}
+		}
+		if (index == -1) {
+			lib.printerr("-Struct:get:There is no item for key")			
+		}
+		
+		return values.x(index)
+	}
+	public set
+    proc set() { local index
+		// $s1 / $1 : key
+		// $2 : value
+        if (argtype(1) == 2) {
+            index = getIndex($s1)		
+        } else {
+			if ($1 < count -1 ) {
+				index = $1
+			} else {
+				index = -1
+			}
+		}
+		if (index == -1) {
+			lib.printerr("-Struct:get:There is no item for key")			
+		} 
+		
+		values.x(index) = $2
+		
+	}	
+	
+	public size
+    func size() {
+        return keys.count()
+    }
+    
+    obfunc keyList() {
+        return keys
+    }
+    
+    func getIndex() { \
+        local i \
+        localobj s
+        
+        for i = 0, keys.count() - 1 {
+            s = keys.o(i)
+            if (strcmp(s.s, $s1) == 0) {
+               return i 
+            }
+        }
+        
+        return -1
+    }
+	
+	public printf
+	proc printf(){local i
+		print "List "
+		print "----KEY----------VALUE------"
+		for (i = 0;i<count;i+=1){
+			print keys.o(i).s,values.x(i)
+		}
+	}
+endtemplate Struct

@@ -1,0 +1,36 @@
+param_SimulationID = 1.000000
+param_repeat = 1.000000
+param_tstop = 0.000000
+param_osc = 0.000150
+param_phase = 120.000000
+
+param_DataSetIdBase = 523380
+param_DataSetId = 52338021
+param_noise = 0.100000
+param_osc = 0.000100
+param_holding = 0.100
+param_bias = 0.000000
+param_synTau = 30.000000
+param_synWeight = 0.000200
+param_phase = 70.000000
+param_tstop = 200000
+
+
+param_FlagPP = 1.000000
+param_griddata = 250.000000
+
+strdef param_gridmodel_path
+sprint(param_gridmodel_path, "./gridnum_250_100trials/")
+
+strdef param_outputfolder
+sprint(param_outputfolder, "./data/190313_multi_gridnum_%d/", param_griddata)
+
+func floor_temp() { localobj v
+	v = new Vector()
+	v.append($1)
+	v.floor()
+	return v.x(0)
+}
+
+load_file("nrngui.hoc")
+load_file("Init.hoc")

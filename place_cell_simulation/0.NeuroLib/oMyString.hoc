@@ -1,0 +1,95 @@
+
+
+begintemplate myString
+	public s
+	strdef s
+	
+	objref strfunc
+	
+	public set, get, sprintf
+	
+	proc init() {
+		if (numarg() > 0 ) {
+			sprint(s, $s1)
+		} else {
+			sprint(s, "")
+		} 
+		strfunc = new StringFunctions()
+	}
+	
+	proc set() {
+		sprintf($s1)
+	}
+	
+	public len
+	func len() {
+		strfunc.len(s)
+	}
+	func mod() {
+		
+	}
+	proc sprintf() {
+		if (numarg() == 1) {
+			sprint(s, $s1)
+		} else if  (numarg() == 2) {
+			sprint(s, $s1, $2)
+		} else if  (numarg() == 3) {
+			sprint(s, $s1, $2, $3)
+		} else if  (numarg() == 4) {
+			sprint(s, $s1, $2, $3, $4)
+		} else if  (numarg() == 5) {
+			sprint(s, $s1, $2, $3, $4, $5)
+		} else if  (numarg() == 6) {
+			sprint(s, $s1, $2, $3, $4, $5, $6)
+		} else {
+			print "Number of Arguments must be below 6"
+		}
+	}		
+endtemplate myString
+
+begintemplate MyString
+	public s
+	strdef s
+	
+	objref strfunc
+	
+	public set, get, sprintf
+	
+	proc init() {
+		if (numarg() > 0 ) {
+			sprint(s, $s1)
+		} else {
+			sprint(s, "")
+		} 
+		strfunc = new StringFunctions()
+	}
+	
+	proc set() {
+		sprintf($s1)
+	}
+	
+	public len
+	func len() {
+		strfunc.len(s)
+	}
+	func mod() {
+		
+	}
+	proc sprintf() {
+		if (numarg() == 1) {
+			sprint(s, $s1)
+		} else if  (numarg() == 2) {
+			sprint(s, $s1, $2)
+		} else if  (numarg() == 3) {
+			sprint(s, $s1, $2, $3)
+		} else if  (numarg() == 4) {
+			sprint(s, $s1, $2, $3, $4)
+		} else if  (numarg() == 5) {
+			sprint(s, $s1, $2, $3, $4, $5)
+		} else if  (numarg() == 6) {
+			sprint(s, $s1, $2, $3, $4, $5, $6)
+		} else {
+			print "Number of Arguments must be below 6"
+		}
+	}		
+endtemplate MyString

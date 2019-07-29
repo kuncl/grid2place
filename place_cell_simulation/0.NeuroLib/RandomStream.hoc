@@ -1,0 +1,61 @@
+begintemplate RandomStream
+strdef LOG_TAG
+
+public r, getrand, start, stream
+
+external lib
+objref r
+proc init() { 
+	LOG_TAG = "RandomStream"
+	nowseed = 0 
+	newseed()	
+}
+public newseed
+func newseed() { localobj fp
+	strdef seedpath
+	sprint(seedpath, "%s/RandomStream_data.dat",lib.libpath)
+	{xopen(seedpath)}	
+	nowseed = nowseed + 1
+	
+	lib.Log.log_i(LOG_TAG, "Now Random Seed = %f", nowseed)
+
+	fp = new File()
+	if (fp.wopen(seedpath)>0) {
+		fp.printf("nowseed = %f \r\n",nowseed)
+		fp.close()
+	}
+	setseed(nowseed)
+	return nowseed
+}
+public setseed
+proc setseed() {
+	r = new Random($1)
+}
+
+public rand
+func rand() {	
+	return r.uniform(0,1)
+}
+
+public uniform
+func uniform(){
+	return r.uniform($1,$2)
+}
+
+public poisson
+func poisson(){
+	return r.poisson($1)
+}
+public normal
+func normal(){
+	return r.normal($1,$2)
+}
+public getr
+obfunc getr(){
+	return r
+}
+func repick() {
+	return r.repick()
+}
+endtemplate RandomStream
+

@@ -1,0 +1,894 @@
+
+begintemplate StepProtocol
+	external lib
+	external my_run, tstop
+	external graphList
+	external MyGraph
+	external CellCon
+	external ExpCon
+	
+	strdef LOG_TAG
+	
+	public expCell
+	objref expCell, pwm
+	public nogrp
+	public startamp, stepamp, finalamp,stepdel,stepdur
+	proc init() {
+		sprint(LOG_TAG,"StepProtocol")
+		lib.printsys("STEP PROTOCOL")
+		
+		stepdel = 100	// ms
+		stepdur = 500	// ms
+		
+		startamp = 0 	// pA
+		stepamp = 20	// pA
+		finalamp =300  // pAs
+				
+		
+		cell_rin = 0
+		cell_tau = 0 
+		cell_sagratio = 0 
+		cell_thresh = 0
+		cell_ahp = 0
+		cell_rest = 0 
+		cell_gain = 0
+		cell_apsize = 0 
+		
+		nogrp = lib.false
+		
+		pwm = new PWManager()
+		
+		menu()
+		// if (nogrp) {
+			// pwm.hide(pwm.count()-1)
+		// }
+		
+		// rin2()
+		// sagtest()
+		// runbpap()
+		// runthreshold()	
+		// runosc()
+		// runstep()
+		
+		// runbiophys()
+		expCell = CellCon.browser_selected()
+	}
+	
+	objref vb,hb,grp
+	proc menu() { 
+		hb = new HBox() 
+		hb.intercept(1)
+			vb = new VBox()
+			vb.intercept(1)
+				xpanel("Exp",0)
+
+					xlabel("Step Protocol")
+					xpvalue("Step Delay (ms)", &stepdel)
+					xpvalue("Step Duration (ms)", &stepdur)
+					xpvalue("Step Amplitude (pA)", &stepamp)			
+					xpvalue("Final Amplitude (pA)", &finalamp)			
+				xpanel()
+				xpanel("",0)			
+					xbutton("Run","runstep()")
+					xbutton("RunISI","runisi()")
+					xbutton("RunBPAP","runbpap()")
+					xbutton("Test Sag","sagtest()")
+					xbutton("Test Input Resistance","rin2()")
+					xbutton("Find AP Threshold","runthreshold()")
+					xbutton("Auto Fit","runbiophys()")
+					xbutton("BasicTest","basictest()")
+					xbutton("OscTest","runosc()")
+					xbutton("Quit","quit()")
+				xpanel()
+			vb.intercept(0)
+			vb.map("Step Protocol")		
+			
+			vb = new VBox()
+			vb.intercept(1)
+				xpanel("Exp",0)
+					xlabel("Cell Properties")
+					xpvalue("Input Resistance (MOhm)", &cell_rin)
+					xpvalue("Membrane Time Constant (ms)", &cell_tau)
+					xpvalue("Resting Potential (mV)", &cell_rest)
+					xpvalue("Sag Ratio (a.u.) ", &cell_sagratio)
+					xpvalue("Threshold (mV)", &cell_thresh)			
+					xpvalue("AHP Size (mV)", &cell_ahp)			
+					xpvalue("Cell Gain (Hz/pA)", &cell_gain)			
+				xpanel()
+			vb.intercept(0)
+			vb.map("Step Protocol")		
+			
+			vb = new VBox()
+			vb.intercept(1)
+				xpanel("FF")
+					xlabel("Cells")
+					CellCon.browser()
+				xpanel()
+			vb.intercept(0)
+			vb.map("Step Protocol")
+			
+			vb = new VBox()
+			vb.intercept(1)
+				grp = new MyGraph()
+				graphList[0].append(grp.g)
+				
+			vb.intercept(0)
+			vb.map("Step Protocol")		
+		hb.intercept(0)
+		hb.map("Step Protoco")
+	}
+	
+
+	proc runrest() { local i localobj stim, cell, apc,vv		
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+		
+
+		tstop= stepdel
+		grp.g.size(0,tstop,-70,30)
+		grp.g.addvar(cell.desc, &cell.soma.v(0.5))
+
+		vv=  new Vector()
+		vv.record(&cell.soma.v(0.5))
+		cell.soma apc = new APCount(0.5)
+		
+		my_run()		
+		cell_rest = vv.x(vv.size()-1)
+		print "Resting Membrane Potential is = ", cell_rest, " mV"
+		
+		
+		cell_rest_ap = apc.n
+
+		stim = lib.nil
+		apc = lib.nil		
+	}
+	
+	
+	proc runthreshold() { local i, threshold, runcnt localobj stim, cell, apc,vv		
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+		if ( cell_rest == 0) { runrest() } 
+		if (cell_rin ==0 ) {rin2() }
+		
+		cell.soma apc = new APCount(0.5)
+		cell.soma stim = new IClamp(0.5)
+		
+		stim.del = stepdel
+		stim.dur =20
+		stim.amp = 0.1
+		tstop= stepdel+stim.dur+stepdel
+		grp.g.erase_all()
+
+		grp.g.size(0,tstop,-70,30)
+		grp.g.addvar(cell.desc, &cell.soma.v(0.5))
+
+		threshold = cell_rest
+		vv=  new Vector()
+		vv.record(&cell.soma.v(0.5))
+		
+		nowamp = 0.1
+		preap = 0 
+		runcnt = 0 
+		while (1) {			
+
+			stim.amp = stim.amp + nowamp
+			preap = apc.n
+			
+			runcnt = runcnt+1
+			my_run()
+			
+			if (apc.n ==0) {
+				cell_thresh = vv.max()
+			}
+			
+			// if ((nowamp < 0.005 && apc.n == 1) || runcnt>15) {
+			if ((nowamp < 0.001 && apc.n == 1) || runcnt>20) {
+				cell_rheobase = stim.amp
+				break
+			}
+			if ( apc.n > 0)  { 
+				stim.amp -= nowamp
+				nowamp = nowamp/2				
+			}
+						
+		}
+		print "Spike Threshold is = ", cell_thresh, " mV / ", cell_rheobase, " pA"
+		
+		stim = lib.nil
+		apc = lib.nil
+	}
+	
+	objref fi_g, ig,fi_y
+	func runstep() {  local i localobj stim, cell,apc, fi_x
+		
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+		
+		grp.g.erase_all()
+		
+		
+		fi_x = new Vector()
+		fi_y = new Vector()
+		
+		// CellCon.record_init()
+		cell.soma stim = new IClamp(0.5)
+		stim.del = stepdel
+		stim.dur = stepdur
+		for (i= startamp; i<= finalamp; i +=stepamp) {
+			stim.amp = i/1000
+			tstop=  stepdel+stepdur+stepdel
+			
+			cell.soma apc = new APCount(0.5)
+			apc.n = 0
+			apc.thresh = 0 
+			
+			grp.g.addvar(cell.desc, &cell.soma.v(0.5))
+			grp.g.size(0,tstop,-70,30)
+						
+			my_run()
+							
+			fi_x.append(i)
+			fi_y.append(apc.n / (stim.dur/1000))			
+		}
+		// cell_gain = (fi_y.x(5) - fi_y.x(4)) / (fi_x.x(5) - fi_x.x(4))
+		
+		if (nogrp== lib.false) {
+			fi_g = new MyGraph()
+			fi_y.line(fi_g.g,fi_x,i+2,1)
+			fi_y.mark(fi_g.g,fi_x,"O",5,i+2,1)
+			fi_g.g.size(0,finalamp,0,fi_y.max())
+			fi_g.xlabel("Input current(pA)")
+			fi_g.title("F (frequency) - I (current) curve")
+		}
+		stim = lib.nil
+		// CellCon.record_save("test","./")
+		return fi_y.x(fi_y.size()-1)
+	}
+	
+	objref isi_g
+	proc runisi() {local ii  localobj stim, cell,apc,isi_y, apc_v
+
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+		
+		grp.g.erase_all()
+			
+		isi_y = new Vector()
+		
+
+		cell.soma stim = new IClamp(0.5)
+		stim.del = stepdel 
+		stim.dur = stepdur
+		stim.amp = finalamp/1000
+		// stim.amp = 200/1000
+		
+		tstop= stepdel+stepdur+stepdel
+		apc_v = new Vector()
+		cell.soma apc = new APCount(0.5)
+		apc.n = 0
+		apc.record(apc_v)
+				
+		grp.g.addvar(cell.desc, &cell.soma.v(0.5))
+		grp.g.size(0,tstop,-70,30)
+			
+		my_run()
+			
+		isi_y = new Vector()	
+		for (ii=0;ii<apc_v.size() -1;ii=ii+1){ 
+			isi_y.append(apc_v.x(ii+1) - apc_v.x(ii) )			
+		}
+		
+		if (nogrp== lib.false) {
+
+			isi_g = new MyGraph()
+			isi_y.line(isi_g.g, 1,1,3)
+			isi_y.mark(isi_g.g, 1,"O", 5, 1,3)
+			isi_g.g.size(0,isi_y.size()+1,0,150)
+			isi_g.xlabel("Spike Number")
+			isi_g.title("ISI curve")
+		}
+		stim = lib.nil		
+	}
+	
+	
+	objref bpap_g, g_ap
+	func runbpap() {local ii,dist_ref,bpapratio localobj stim, cell,apc,bpap_y, bpap_x, vv, vt
+
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+		
+		if ( cell_rest == 0) { runrest() } 
+		
+		grp.g.erase_all()
+			
+		
+		cell.soma stim = new IClamp(0.5)
+		stim.del = stepdel
+		stim.dur = 3
+		stim.amp = 2
+		
+		tstop= stim.del *2 +50
+		
+		grp.g.addvar(cell.desc, &cell.soma.v(0.5))
+		grp.g.size(0,tstop,-70,30)
+		
+		if (nogrp== lib.false) {
+
+			g_ap = new MyGraph()
+			g_ap.g.addvar(cell.desc, &cell.soma.v(0.5))
+			g_ap.g.size(0,tstop,-70,30)
+			g_ap.live()
+		}
+		vv = new Vector()
+		vt = new Vector()
+		vv.record(&cell.soma.v(0.5))
+		vt.record(&t)
+		
+		my_run()
+		
+		if (nogrp== lib.false) {
+
+			g_ap.unlive()
+		}
+		access cell.soma
+		distance()
+		
+		bpap_x = new Vector()	
+		bpap_y = new Vector()	
+		
+		forsec cell.all {
+		// forsec cell.apiList {
+			bpap_y.append(vmax_ds - cell_rest)			
+			bpap_x.append(distance(0.5))
+		}
+		
+		if (nogrp== lib.false) {
+			bpap_g = new MyGraph()
+			// bpap_y.line(bpap_g.g, bpap_x,1,3)
+			bpap_y.mark(bpap_g.g, bpap_x,"O", 5, 1,3)
+			bpap_g.g.size(0,bpap_x.max(),0,100)
+			bpap_g.xlabel("Distance (um)")
+			bpap_g.title("BPAP")
+		}		
+		bpapratio = ((bpap_y.x(0) - bpap_y.x(bpap_y.size()-1))/(bpap_y.x(0))) * 100
+
+		
+		cell.soma {
+			
+			cell_ahp= cell_rest - vv.min(vt.indwhere(">=", stim.del), vt.size()-1)
+			cell_apsize = vmax_ds - cell_rest
+		}		
+		
+		stim = lib.nil		
+		return bpapratio
+	}
+
+	objref osc_g, g_ap
+	proc runosc() {local ii,dist_ref,bpapratio localobj stim, cell,apc,bpap_y, bpap_x
+
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+		
+		if ( cell_rest == 0) { runrest() } 
+		
+		grp.g.erase_all()
+			
+		
+		// cell.soma stim = new SinOsc(0.5)		
+		// stim.del = 1000
+		// stim.dur = 1000
+		// stim.del = 100
+		// stim.dur = 2000
+		// stim.freq = 5
+		// stim.gsinbar = 0.001
+		// stim.sinphase = -270
+		// stim.esin = -70
+
+		
+		// stim.eramp = 0
+		// stim.grampbar = 0.003   *0 
+		// stim.ramppos = 0.8
+		
+		// stim.bias = 0.05
+		// stim.bias = 0.125
+		// stim.bias = 0.11
+		// if (cell_rheobase>0) {
+			// stim.bias = cell_rheobase * (0.75)
+		// }
+		
+		tstop= stim.del + stim.dur + stim.del
+		
+		grp.g.addvar(cell.desc, &cell.soma.v(0.5))
+		grp.g.size(0,tstop,-70,30)
+			
+		osc_g = new MyGraph()
+		osc_g.g.addvar(cell.desc, &cell.soma.v(0.5))
+		osc_g.g.size(0,tstop,-70,30)
+		osc_g.live()
+		
+		my_run()
+		
+		osc_g.unlive()
+		stim = lib.nil		
+	}
+
+	func sagtest() { local V2, V1, sag localobj cell, stim,  vsoma, vt
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}		
+		
+		
+		grp.g.erase_all()
+
+		vsoma=new Vector()                                     // record voltage at soma and store in vector vsoma  
+		vsoma.record(&cell.soma.v(0.5))
+		vt = new Vector()
+		vt.record(&t)
+		
+		cell.soma stim = new IClamp(0.5)
+		stim.del = 500
+		stim.dur = 500
+		stim.amp = -0.03
+
+		tstop = stim.del +stim.dur + 10//+ ic.del + ic.dur + 50
+		
+		grp.g.addvar(cell.desc, &cell.soma.v(0.5))
+		grp.g.size(0,tstop,-70,30)
+					
+		my_run()
+		
+		
+		V2idx  = (stim.del + stim.dur)/dt		
+		V2idx = vt.c.indwhere(">=",stim.del+stim.dur)
+		V2 = vsoma.x(V2idx)
+		
+		V1idx  = (stim.del)/dt
+		V1idx = vt.c.indwhere(">=",stim.del)
+				
+		
+		V1 = cell.soma.vmin_ds(0.5)
+		V1 = vsoma.min(V1idx,V2idx)
+		
+		
+		cell_sagratio = (V1 - V2 )/  (V1 - vsoma.x(V1idx))
+
+		
+		print "Sag Ratio : " , cell_sagratio
+		
+		stim = lib.nil		
+		
+		return cell_sagratio
+
+	}
+	
+	strdef s, msname
+	objref this
+	public pp_val
+	proc pp_datasave() { local i,j,k,p localobj fp, cell, ms, mt, pp
+		cell = $o1
+		// Dump Cell Parameters
+		fp = new File()
+		fp.wopen($s2)
+		
+		access cell.soma
+		pp_val = 0 
+		for p = 0,1 {
+			mt = new MechanismType(p)
+			for i=0, mt.count-1 {
+				mt.select(i)
+				mt.selected(msname)
+				if (ismembrane(msname)) {
+					ms = new MechanismStandard(msname, 1)
+						
+					if (p==0) {
+						fp.printf("//--------------------\r\n" )
+						fp.printf("// %s \r\n" ,msname)
+						fp.printf("//--------------------\r\n" )
+						
+						for j=0, ms.count()-1 {
+							k = ms.name(s, j)
+							strdef tempstr
+							sprint(tempstr,"%s.pp_val = %s.soma.%s(0.5)",this,cell, s)
+							execute1(tempstr)
+							fp.printf("\t%s = %f \r\n", s,pp_val)
+						}
+					} else {
+						for (pp = mt.pp_begin(); object_id(pp) != 0; pp = mt.pp_next()) {
+							fp.printf("//--------------------\r\n" )
+							fp.printf("// %s \r\n" ,pp)
+							fp.printf("//--------------------\r\n" )
+							for j=0, ms.count()-1 {
+								k = ms.name(s, j)
+								strdef tempstr
+								sprint(tempstr,"%s.pp_val = %s.%s",this,pp, s)
+								execute1(tempstr)
+								fp.printf("\t%s = %f \r\n", s,pp_val)
+							}
+
+						}
+					}
+					
+				}
+			}		
+		}
+		fp.printf("//--------------------\r\n" )
+		fp.printf("// ra \r\n" )
+		fp.printf("//--------------------\r\n" )
+		
+		sprint(tempstr,"%s.pp_val = %s.soma.Ra",this,cell)
+		execute1(tempstr)
+		fp.printf("\tRa = %f \r\n", pp_val)
+
+		sprint(tempstr,"%s.pp_val = %s.soma.g_pas(0.5)",this,cell)
+		execute1(tempstr)
+		fp.printf("\tRm = %f \r\n", 1/pp_val)		
+		fp.close()
+	}
+	public total_test
+	proc total_test() {
+		rin2()
+		sagtest()
+		runrest()
+		runbpap() 		
+		runstep()									
+		// runisi()
+	}
+	
+	proc basictest(){
+		total_test()
+	}
+	public test_dump
+	proc test_dump() { localobj cell
+		strdef outdir
+		outdir = $s1
+		
+		strdef fpname
+		fpname = $s2
+		cell = $o3
+		
+		lib.mkdir(outdir)
+		if (nogrp== lib.false) {
+			sprint(lib.cmd,"%s/%s_FI", outdir,fpname)
+			fi_g.printjpg(lib.cmd)
+			sprint(lib.cmd,"%s/%s_STEP", outdir,fpname)
+			grp.printjpg(lib.cmd)				
+			// sprint(lib.cmd,"%s/%s_BPAP", outdir,fpname)
+			// bpap_g.printjpg(lib.cmd)
+			// sprint(lib.cmd,"%s/%s_AP", outdir,fpname)
+			// g_ap.printjpg(lib.cmd)
+		}
+		sprint(lib.cmd,"%s/%s_detail.txt",outdir,fpname)
+		pp_datasave(cell, lib.cmd)
+				
+	}
+	
+	proc runbiophys() {	local sid, rm, ra, gnaidx,gkdridx,nash,kaidx,gnapidx,gna,gkdr,ka,ghd,gnap localobj cell, fp,str
+
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+		
+		
+		strdef outdir
+		sprint(outdir,"./data/autoFit/autoFit_%d", ExpCon.getExpID)
+		lib.mkdir(outdir)
+		
+		sid = 0
+		
+		rm = 20000
+		// rm = 40000
+		// rm = 60000
+		ra = 100
+		// ra = 150
+		// ra = 300
+		
+		gnaidx = 100
+		gkdridx = 100
+		nashidx = 0
+		kaidx = 100
+		ghd =100
+		gnapidx =100
+		// for (gnaidx = 10; gnaidx = 200; gnaidx +=5) {
+			// for (gkdridx =(gnaidx / 10)*0.5; gkdridx < (gnaidx / 10)*1.5 ; gkdridx +=gnaidx/100) {
+				// for (nashidx = 0; nashidx <= 10; nashidx+=1) {
+					// for (kaidx = 10; kaidx < 50;kaidx +=1) {
+						// for (gnapidx = 10; gnapidx < 50; gnapidx +=2) {
+							print rm,ra,gnaidx,gkdridx,nash,kaidx,gnapidx
+							gna = gnaidx *1e-4  
+							gkdr = gkdridx *1e-4
+							nash = nashidx
+							ka= kaidx * 1e-4
+							ghd = 0.00001
+							gnap = gnapidx *1e-6
+							
+							cell.rebiophys(rm,ra,gna,gkdr,nash,ka,ghd,gnap)
+							
+							sid = sid+1
+							
+							rin2()
+							runrest()
+							// if ( ( cell_rin > 80 && cell_rin< 200) && (cell_tau > 10 && cell_tau < 40) && (cell_rest > -68 && cell_rest < -52 )) {			
+								runbpap() 
+								// if (cell_ahp < 3) {
+									runstep()									
+									// if ((fi_y.x(0)>=2 && fi_y.x(0) <=5) && (fi_y.x(fi_y.size()-1) >=10 && fi_y.x(fi_y.size()-1) <=15)) {
+										runisi()	
+										
+										strdef fpname
+										sprint(fpname,"Ahp%.2f_Rin%.2f_Eid%d_Sid%d", cell_ahp, cell_rin,ExpCon.getExpID, sid)
+										
+										test_dump(outdir,fpname, cell)
+									// }
+								// }
+							// }
+						// }
+					// }
+				// }
+			// }
+		// }
+	}
+	public test_rest
+	obfunc test_rest() { localobj vv
+		runrest()
+		vv= new Vector()
+		vv.append(cell_rest)
+		vv.append(cell_rest_ap)
+		return vv
+	}
+	public test_ap
+	obfunc test_ap() { localobj vv, apc, cell, vsoma
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+		
+		cell.soma apc = new APCount(0.5)
+		apc.n = 0 
+		apc.thresh = -10
+		vsoma = new Vector()
+		vsoma.record(&cell.soma.v(0.5))
+		
+		runbpap()
+		vv = new Vector()
+		vv.append(cell_ahp)
+		vv.append(cell_apsize)
+		vv.append(apc.n)
+		vv.append(vsoma.x(vsoma.size()-1))
+		return vv
+	}
+	public test_rin
+	obfunc test_rin() { localobj vv
+		rin2()
+		runrest()
+		vv= new Vector()
+		vv.append(cell_rin)
+		vv.append(cell_tau)
+		return vv
+	}
+	public test_sag
+	func test_sag() { localobj vv
+		sagtest()
+
+		return cell_sagratio
+	}
+	public test_step
+	obfunc test_step() {
+		startamp = 100 	// pA
+		stepamp = 50	// pA
+		finalamp =300  // pAs
+		
+		runstep()
+		return fi_y
+	}
+
+	public test_step_pp
+	proc test_step_pp() { local eid, sid localobj vv, params, fp
+		strdef outdir, filename, fpname
+		sprint(outdir, $s1)
+		eid = $2
+		sid = $3
+		params = $o4
+		
+		sprint(filename,$s5)
+		lib.unlink(filename)
+
+		print "Test Step Start!!!!!!"
+		vv = test_step().c
+		
+		print "Test STep Finished!!!!!"		
+		sprint(fpname,"Eid%d_Sid%d", eid, sid)		
+		
+		if (vv.x(2) > 15 && vv.x(2) < 35 && vv.x(2) > vv.x(1) && vv.x(1) > vv.x(0)) {
+			print "Dump step responses"
+			test_dump(outdir,fpname,expCell)			
+				
+			fp = new File()
+			sprint(filename,"%s/%s_simple.txt",outdir, fpname)
+			fp.wopen(filename)
+			for (i=0;i<params.count();i+=1){
+				fp.printf("params.o(%d).NowData = %f\r\n", i, params.o(i).NowData)			
+			}
+			fp.close()
+		}
+		fp = new File()
+		sprint(filename,"%s/done_%s.txt",outdir, fpname)
+		fp.wopen(filename)
+		fp.close()
+		quit()
+		
+	}
+	
+	objref vecFitX0, vecFitY0	
+	objref vecFitResultX, vecFitResultY	
+	double fitVar[7]	
+
+	proc fit_init() {
+		vecFitResultX = new Vector()
+		vecFitResultY = new Vector()
+	}
+
+	//================================================================================
+	// Exponential decay
+
+	// Error Function
+	func ErrorExponentialDecay() {local amp, x0, y0, tau, error
+		y0 = $&2[0]
+		amp = $&2[1]
+		x0 = $&2[2]
+		tau = $&2[3]
+		
+		error = 0
+
+		for(i=0; i<vecFitX0.size(); i+=1){
+			error += (vecFitY0.x[i] - (y0+amp*exp(-(vecFitX0.x[i]-x0)/tau)))^2
+		}
+		
+		//print vecFitY0.x[0], " ", (y0+amp*exp(-(vecFitX0.x[0]-x0)/tau))
+
+		return error
+	}
+
+	// Procedure
+	proc FitExponentialDecay(){local error, y0, amp, x0, tau
+		// X and Y coordinates
+		vecFitX0 = $o1
+		vecFitY0 = $o2
+		
+		// Set fitting parameters
+		fitVar[0] = $&3
+		fitVar[1] = $&4
+		fitVar[2] = $&5
+		fitVar[3] = $&6
+		
+		attr_praxis(1e-5, 1, 0)
+		// attr_praxis(1e-5, .5, 0)
+		error = fit_praxis(4, "ErrorExponentialDecay", &fitVar[0])
+		
+		$&3 = fitVar[0]
+		$&4 = fitVar[1]
+		$&5 = fitVar[2]
+		$&6 = fitVar[3]
+		
+		y0 = fitVar[0]
+		amp = fitVar[1]
+		x0 = fitVar[2]
+		tau = fitVar[3]
+
+		//printf("y0=%g amp=%g x0=%g tau=%g error=%g\n", fitVar[0], fitVar[1], fitVar[2], fitVar[3], error)
+		
+		vecFitResultX.resize(0)
+		vecFitResultY.resize(0)
+		
+		for(i=0; i<vecFitX0.size(); i+=1){
+			x = vecFitX0.x[i]
+			vecFitResultX.append( x )
+			vecFitResultY.append( y0 + amp * exp(-(x-x0)/tau) )
+		}
+	}
+	objref graphFitting
+	func rin2() { local V2, V1 localobj cell, stim, vt, vsoma,vecFitResultY
+		if (CellCon.browser_selected() == lib.nil) {
+			lib.printerr("Cell was not specified")
+			break
+		} else{
+			cell = CellCon.browser_selected()
+		}
+
+		vt = new Vector() 
+		vt.record(&t)
+		vsoma=new Vector()                                     // record voltage at soma and store in vector vsoma  
+		vsoma.record(&cell.soma.v(0.5))
+
+		cell.soma stim = new IClamp(0.5)
+		stim.del = stepdel
+		stim.dur = 50
+		stim.amp = -0.01
+
+		grp.g.addvar(cell.desc, &cell.soma.v(0.5))
+		grp.g.size(0,tstop,-70,30)
+			
+
+		tstop = stim.del +stim.dur+10//+ ic.del + ic.dur + 50
+		my_run()
+		
+		
+		fit_init()
+		
+		// index2 = vt.c.indwhere(">=",stim.del + stim.dur).x(0)
+
+		index1 = stim.del/dt
+		// lib.Log.log_i(LOG_TAG,"index1 = %f ",index1)
+	
+		index1 = vt.c.indwhere(">=",stim.del)
+		
+		// lib.Log.log_i(LOG_TAG,"index1 = %f ",index1)
+		print index1
+		index2 = ( stim.del+stim.dur ) /dt
+		index2 = vsoma.min_ind(index1, vsoma.size()-1)
+		
+		vecFitX0 = vt.c(index1, index2).sub(stim.del)		// Create time vector
+		vecFitY0 = vsoma.c(index1, index2)		// Create voltage vector
+		
+		y0 = cell.Vrest
+		amp = -0.1
+		x0 = 0
+		tau = 20
+		FitExponentialDecay(vecFitX0, vecFitY0, &y0, &amp, &x0, &tau)
+		
+		// vecFitResultY= new Vector()
+		// vecFitResultY.resize(0)
+		
+		// for(i=0; i<vecFitX0.size(); i+=1){
+			// x = vecFitX0.x[i]
+			// vecFitResultY.append(y0+amp*exp(-(x-x0)/tau))
+		// }
+		// graphFitting = new Graph()
+		// graphFitting.erase()
+		// vecFitY0.plot(graphFitting, vecFitX0, 1, 1)
+		// vecFitResultY.plot(graphFitting, vecFitX0, 2, 1)
+		// graphFitting.exec_menu("View = plot")
+		
+		// print x0, y0, amp, tau
+		// print "Rin : ", -1*(amp / stim.amp), "MOhm"
+		print "Tau : ", tau, "ms"
+		cell_tau = tau
+	
+		cell_rin = (vsoma.x(index2) - vsoma.x(index1) )/stim.amp	
+		print "InputResistance : " , cell_rin, "MOhm"
+		
+		stim = lib.nil
+		return cell_rin
+	}
+endtemplate StepProtocol

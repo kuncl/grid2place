@@ -1,0 +1,208 @@
+{load_file("nrngui.hoc")}
+objref grpList, grpMinList, grpMaxList
+strdef grpExportStr 
+
+grpList = new List()
+grpMinList = new Vector()
+grpMaxList = new Vector()
+// Count of Graph
+gCnt = 0 
+
+proc add_graph() {
+    $o1 = new Graph()
+    graphList[0].append($o1)
+}
+
+// Make New Graph 
+// new_graph( minYaxis, maxYaxis) 
+strdef grpTempStr
+func new_graph() { localobj grp
+	grp = new Graph()
+	grpMinList.append($1)
+	grpMaxList.append($2)	
+	
+	sprint(grpTempStr, "grpExportStr=\".jpg\" string_dialog(\"Export to ...\",grpExportStr) printjpg(grpList.o(%d),grpExportStr)",gCnt)
+	grp.menu_action("Export to JPG", grpTempStr)
+	
+	sprint(grpTempStr, "grpExportStr=\".eps\" string_dialog(\"Export to ...\",grpExportStr) printfile(grpExportStr)")
+	grp.menu_action("Export to EPS", grpTempStr)
+	
+	graphList[0].append(grp)
+	grpList.append(grp)	
+	
+	gCnt = gCnt + 1
+	return (gCnt - 1)
+}
+
+// Return Graph Object
+// getGraph(grpIndex)
+obfunc get_graph() {
+	return grpList.o($1)
+}
+
+
+// Add the ploting on graph
+// addPlot(grpIndex, grpLabel, grpExpression, grpColor, grpLineStyle)
+proc add_plot() {
+	grpList.o($1).addexpr($s2, $s3, $4, $5)
+}
+
+// Add the label on graph
+// addLabel(grpIndex, grpLabel)
+// addLabel(grpIndex, grpLabel, grpXposition, grpYposition)
+proc add_label() {	
+	if (numarg() > 2) {
+		grpList.o($1).label($3,$4, $s2)
+	} else {
+		grpList.o($1).label($s2)
+	}
+}
+
+proc grpExec() {
+		grpList.o($1).exec_menu($s2)	
+}
+// Make the Vertical Box
+// Start Point
+proc vbox_st() {
+    $o1 = new VBox()
+    $o1.intercept(1)
+}
+// End point
+proc vbox_ed() {
+    $o1.intercept(0)
+    $o1.map($s2, $3, $4, $5, $6)
+}
+
+
+// Make the Horizontal Box
+// Start Point
+proc hbox_st() {
+    $o1 = new VBox()
+    $o1.intercept(1)
+}
+// End Point
+proc hbox_ed() {
+    $o1.intercept(0)
+    $o1.map($s2, $3, $4, $5, $6)
+}
+
+// Initialize graph with default value
+proc adjust_graph(){ local i
+	for i=0,gCnt-1  {
+		grpList.o(i).size (T_STARTTIME-100, tstop, grpMaxList.x[i], grpMinList.x[i])
+	}	
+}
+
+proc grp_unmap() { 
+	$o1.unmap()
+}
+proc grp_map() {
+    $o1.intercept(1)
+    $o1.intercept(0)	
+    $o1.map($s2, $3, $4, $5, $6)
+}
+
+
+begintemplate MyGraph
+	external lib
+	
+	public g
+	objref g
+	objref te
+	strdef fn
+
+	external printjpg
+	proc filename(){
+		te = new File()
+		te.chooser("", "Save a jpg file", "*.jpg", "Save")
+		if (te.chooser()) {
+			te.getname(fn)
+			lib.printjpg(g,fn)
+		}
+	}
+	external graphList
+	proc init() {
+		g = new Graph()
+		g.menu_action("Save JPG", "filename()")
+		g.menu_action("Save EPS", "fn=\".eps\" string_dialog(\"Export to ...\",fn) printfile(fn)")
+		
+		if (numarg()>0) {
+			if ($1 == 1) {
+				graphList[0].append(g)
+			}
+		}
+	}
+	
+	public addexpr
+	proc addexpr() {
+		if (numarg() == 1) {
+			g.addexpr($s1)
+		} else if  (numarg() == 3) {
+			g.addexpr($s1, $2, $3)
+		} 
+	}
+	
+	proc begin() {
+		g.begin()
+	}
+	proc flush() {
+		g.flush()
+	}
+	public size
+	proc size(){
+		g.size($1,$2,$3,$4)
+	}
+	public label
+	proc label() {
+		if (numarg() == 1) {
+			g.label($s1)
+		} else if  (numarg() == 2) {
+			g.label($1, $2)
+		} else if  (numarg() == 3) {
+			g.label($1, $2, $s3)
+		}
+	}
+	public exec_menu
+	proc exec_menu() {
+		g.exec_menu($s1)
+	}
+	
+	public live
+	proc live() {
+		graphList[0].append(g)
+	}
+	public unlive
+	proc unlive() {  local i
+	
+		for (i=0;i<graphList[0].count;i+=1) {
+			if (graphList[0].o(i) == g) {
+				graphList[0].remove(i)
+				break
+			}
+		}
+		
+	}
+	public printjpg 
+	proc printjpg(){
+		lib.printjpg(g, $s1)
+	}
+	
+	public printfile
+	proc printfile(){ 
+		g.printfile($s1)
+	}
+	
+	public xlabel
+	proc xlabel(){ local xmin, xmax, ymin,ymax
+		g.label( 0.5, 0, $s1)		
+	}
+	public ylabel
+	proc ylabel(){ 
+		
+		g.label( 0, 0.5, $s1)
+	}
+	public title
+	proc title() {
+		g.label( 0.5, 0.98, $s1, 2,1,0.5,1,1)
+	}
+endtemplate MyGraph

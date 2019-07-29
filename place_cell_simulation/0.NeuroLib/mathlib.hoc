@@ -1,0 +1,249 @@
+begintemplate MathLib
+	external lib
+	external exc_str
+	external graphList
+	objref this
+	objref mat
+	strdef LOG_TAG
+	proc init(){ 
+		lib.printsys("MathLib:Library is successfully initialized")
+		LOG_TAG = "MathLib"
+		
+	}
+	
+	
+	public floor		
+	func floor() { localobj v
+		v = new Vector()
+		v.append($1)
+		v.floor()
+		return v.x(0)
+	}
+	public xcorr
+	// obfunc xcorr() { local i,j,n,mx,my,sx,sy,denom,sxy,delay localobj src, vec2, vdest, vtemp
+	func xcorr() { local i,j,n,mx,my,sx,sy,denom,sxy,delay localobj src, vec2, vdest, vtemp
+	
+		// startsw()
+		src = $o1
+		vec2 = $o2
+		
+		n = src.size()
+		mx = 0 
+		my = 0 
+		for (i=0;i<n;i+=1){
+			mx+= src.x(i)
+			my+= vec2.x(i)
+		}
+		mx = mx / n
+		my = my / n
+		
+		// mx = src.mean()
+		// my = vec2.mean()
+		
+		sx = 0
+		sy = 0
+		
+		for (i=0;i<n;i+=1) { 
+			sx += (src.x(i) - mx) * (src.x(i) - mx)
+			sy += (vec2.x(i) - my ) * (vec2.x(i) - my)
+		}
+		// sx = src.sub(mx).mul(src.sub(mx)).sum()
+		// sy = vec2.sub(my).mul(vec2.sub(my)).sum()
+
+
+		denom = sqrt(sx*sy)
+
+		vdest = new Vector()
+		maxdelay = n-1
+		for (delay = -maxdelay; delay<= maxdelay; delay+=1) {
+		
+		
+			sxy = 0
+
+			for (i=0;i<n;i+=1){
+				j = i + delay
+				if (j < 0 || j >= n) {
+					
+				} else {
+					sxy += (src.x(i) - mx) * (vec2.x(j) - my)
+				}
+			}
+
+			if (denom != 0) {
+				vdest.append(sxy / denom)
+			} else {
+				vdest.append(sxy )
+			}
+		// print "Time consumed", stopsw()
+
+		}
+		// stopsw()
+		return vdest
+	}
+	
+	public xcorr_zero
+	func xcorr_zero() { local i,j,n,mx,my,sx,sy,denom,sxy,delay localobj src, vec2, vdest, vtemp
+	
+		// startsw()
+		src = $o1
+		vec2 = $o2
+		
+		n = src.size()
+		mx = 0 
+		my = 0 
+		for (i=0;i<n;i+=1){
+			mx+= src.x(i)
+			my+= vec2.x(i)
+		}
+		mx = mx / n
+		my = my / n
+		
+		// mx = src.mean()
+		// my = vec2.mean()
+		
+		sx = 0
+		sy = 0
+		
+		for (i=0;i<n;i+=1) { 
+			sx += (src.x(i) - mx) * (src.x(i) - mx)
+			sy += (vec2.x(i) - my ) * (vec2.x(i) - my)
+		}
+		// sx = src.sub(mx).mul(src.sub(mx)).sum()
+		// sy = vec2.sub(my).mul(vec2.sub(my)).sum()
+
+
+		denom = sqrt(sx*sy)
+
+		vdest = new Vector()
+		
+		
+		delay = 0 
+		sxy = 0
+
+		for (i=0;i<n;i+=1){
+			j = i + delay
+			if (j < 0 || j >= n) {
+				
+			} else {
+				sxy += (src.x(i) - mx) * (vec2.x(j) - my)
+			}
+		}
+		// print "Time consumed", stopsw()
+
+		if (denom != 0) {
+			return sxy / denom
+		} else {
+			return sxy
+		}
+
+	}
+
+
+
+	
+	/*
+	Fits y = mx + b to data by linear regression.
+	Expects x and y data in Vectors, returns m and b. 
+	$o1  x data
+	$o2  y data
+	$&3  m
+	$&4  b
+	m = b = 0
+	linfit (xdat, ydat, &m, &b)
+	*/
+	
+	objref sxdat, sydat
+	public linfit
+	proc linfit() { local num, xmean, ymean, sxy, s1sq  localobj xvec, yvec, xdat,ydat, yfit
+	  num = $o1.size()
+	  if ($o1.size() < 2) {
+		print "Data must contain two or more points."
+		return
+	  }
+	  xdat = $o1
+	  ydat = $o2
+	  sortxy(xdat, ydat)
+	  
+	  xmean = sxdat.mean
+	  ymean = sydat.mean
+
+	  xvec = sxdat.c.sub(xmean)
+	  yvec = sydat.c.sub(ymean)
+
+	  sxy = xvec.c.mul(yvec).sum/(num-1)
+	  s1sq = xvec.sumsq()/(num-1)
+
+	  $&3 = sxy/s1sq
+	  $&4 = -$&3*xmean + ymean
+	  
+	  lib.Log.log_i(LOG_TAG, "linfit:A(slope) = %f, B(offset) = %f", $&3 ,$&4)
+	}
+	public linfit_g
+	proc linfit_g() {local cc,m,b localobj g,xdat
+		g = $o1
+		
+		xdat = $o2
+		m = $3
+		b = $4 
+		
+		cc = $5
+		g.color(cc)
+		g.brush(2)
+		g.beginline()
+		g.line(xdat.min(), rline(xdat.min(), m,b))
+		g.line(xdat.max(), rline(xdat.max(), m,b))
+		g.flush()
+	}
+	
+	/*
+	rearrange data so x values are monotonically increasing
+	$o1  xdata
+	$o2  ydata
+	*/
+
+	proc sortxy() { local ii  localobj xvec, yvec, inx
+	  inx = $o1.sortindex()
+	  xvec = new Vector()
+	  yvec = new Vector()
+	  xvec.index($o1, inx)
+	  yvec.index($o2, inx)
+	  sxdat = xvec
+	  sydat = yvec
+	}
+	/*
+	objref yfit
+	yfit = xdat.c.apply("rline")
+	yfit.mark(g, xdat, "+", 12, 2, 1)
+	*/
+	public rline
+	func rline() {
+	  return $2*$1 + $3
+	}
+	
+	
+	// Circular Mean
+	public deg2rad
+	func deg2rad() {
+		return $1 * (PI / 180)
+	}
+	public rad2deg
+	func rad2deg() {
+		return $1 * (180/PI)
+	}
+	public circ_mean
+	func circ_mean() {local i localobj angles, cosvec, sinvec, radvec
+		angles = $o1
+		cosvec = new Vector()
+		sinvec = new Vector()
+		radvec = new Vector()
+		for (i=0;i<angles.size();i+=1) {
+			cosvec.append(cos(deg2rad(angles.x(i))))
+			sinvec.append(sin(deg2rad(angles.x(i))))
+			radvec.append(deg2rad(angles.x(i)))
+		}
+		// return rad2deg(atan(sinvec.mean() / cosvec.mean()))
+		if (radvec.size() ==0) { return 0 }		
+		
+		return rad2deg(radvec.mean())
+	}
+endtemplate MathLib

@@ -1,0 +1,90 @@
+begintemplate Log
+	external exc_str
+	external lib
+	
+	public log_e	
+	proc log_e() { local i localobj s, logtag
+		logtag = new MyString($s1)
+		s= new String()
+		
+		if (numarg() > 2) {
+			sprint(s.s, "sprint(exc_str,\"%s\"",$s2)
+
+			for (i=3;i<=numarg();i+=1){
+				if (argtype(i)==0) {
+					if (abs($i) - abs(int($i)) > 0) {
+						sprint(s.s, "%s,%f",s.s,$i)
+					} else {
+						sprint(s.s, "%s,%d",s.s,$i)
+					}				
+				} else if (argtype(i)==2) {
+					sprint(s.s, "%s,\"%s\"",s.s,$si)
+				} else if (argtype(i)==1) {
+					sprint(s.s, "%s,\"%s\"",s.s,$oi)
+				}  
+			}
+			sprint(s.s,"%s)",s.s)	
+			execute1(s.s)
+		} else {
+			exc_str = $s2
+		}
+		print "-E|", logtag.s, " : ",exc_str
+	}
+	public log_i
+	proc log_i() { local i localobj s, logtag
+		logtag = new MyString($s1)
+		s= new String()
+		
+		if (numarg() > 2) {
+			sprint(s.s, "sprint(exc_str,\"%s\"",$s2)
+
+			for (i=3;i<=numarg();i+=1){
+				if (argtype(i)==0) {
+					if (abs($i) - abs(int($i)) > 0) {
+						sprint(s.s, "%s,%f",s.s,$i)
+					} else {
+						sprint(s.s, "%s,%d",s.s,$i)
+					}
+				} else if (argtype(i)==2) {
+					sprint(s.s, "%s,\"%s\"",s.s,$si)
+				}else if (argtype(i)==1) {
+					sprint(s.s, "%s,\"%s\"",s.s,$oi)
+				}  
+			}
+			sprint(s.s,"%s)",s.s)	
+			execute1(s.s)
+		} else {
+			exc_str = $s2
+		}
+		print "+I|", logtag.s, " : ",exc_str
+	}
+	
+	public log_v
+	proc log_v() { local i localobj s, logtag
+		logtag = new MyString($s1)
+		s= new String()
+		
+		if (numarg() > 2) {
+			sprint(s.s, "sprint(exc_str,\"%s\"",$s2)
+
+			for (i=3;i<=numarg();i+=1){
+				if (argtype(i)==0) {
+					if (abs($i) - abs(int($i)) > 0) {
+						sprint(s.s, "%s,%f",s.s,$i)
+					} else {
+						sprint(s.s, "%s,%d",s.s,$i)
+					}
+				} else if (argtype(i)==2) {
+					sprint(s.s, "%s,\"%s\"",s.s,$si)
+				}else if (argtype(i)==1) {
+					sprint(s.s, "%s,\"%s\"",s.s,$oi)
+				}  
+			}
+			sprint(s.s,"%s)",s.s)	
+			execute1(s.s)
+		} else {
+			exc_str = $s2
+		}
+		print " V|", logtag.s, " : ", exc_str
+	}
+endtemplate Log

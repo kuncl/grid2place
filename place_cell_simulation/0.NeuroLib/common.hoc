@@ -1,0 +1,295 @@
+strdef exc_str
+begintemplate Lib
+	public libpath
+	strdef libpath
+	
+	public true, false, nil
+	public string, cmd, str
+	strdef string, cmd, str
+	objref nil
+	
+	external exc_str
+	proc init() {
+		true = 1
+		false = 0 
+		
+		sprint(libpath,$s1)
+	}
+	
+	public math, Math
+	objref math, Math
+	public setmath
+	proc setmath() {
+		math = $o1
+		Math = $o1
+	}
+	public CellCon
+	objref CellCon
+	public setCellCon
+	proc setCellCon() {
+		CellCon = $o1
+	}	
+	
+	public Log
+	objref Log
+	public setLog
+	proc setLog() {
+		Log = $o1
+	}
+	public mkdir
+	proc mkdir() { local exs localobj s, tf
+		tf = new File()
+		exs = tf.ropen($s1)
+		if (exs== false) {
+			s= new String()
+
+			if (unix_mac_pc() == 1)  {
+				sprint(s.s, "system(\"mkdir -p %s\")", $s1)
+			} else if (unix_mac_pc() == 3) {
+				sprint(s.s, "system(\"mkdir \\\"%s\\\"\")", $s1)
+			}
+			
+			execute(s.s)	
+		}
+	}
+	public cp
+	proc cp() { local type localobj s
+		type = $1 
+		s= new String()
+		if (type == 0) {// 0: file			
+			sprint(s.s, "system(\"cp %s %s\")", $s2, $s3)
+		} else { // 1: folder
+			sprint(s.s, "system(\"cp -r %s %s\")", $s2, $s3)
+		}
+		execute(s.s)	
+	}
+	public unlink
+	proc unlink() { local exs localobj s, tf
+		tf = new File()
+		exs = tf.ropen($s1)
+		if (exs== true) {
+			tf.unlink()
+		}
+		tf.close()		
+	}
+	public floor		
+	func floor() { localobj v
+		v = new Vector()
+		v.append($1)
+		v.floor()
+		return v.x(0)
+	}
+	public printjpg
+	proc printjpg() { local exs localobj g, nil,  tf
+		printsys("Lib:printjpg:Start Print Graphic to *.jpg")
+		g = $o1
+		if (g== nil) {
+			printerr("Lib:printjpg:No Graphical Object")
+			break
+		} 
+
+		// EPS 출력
+		sprint(string, "%s.eps", $s2)	
+		g.printfile(string)
+		
+		if ( unix_mac_pc() ==3 ) {
+		
+		// GhostScript --> JPG 변환
+		sprint(string, "system(\"%s/gs/gswin64c.exe -sDEVICE=jpeg -dJPEGQ=100 -dNOPAUSE -q -dBATCH -dSAFER -dEPSCrop -r300 -sOutputFile=%s.jpg %s.eps\")", libpath, $s2, $s2)
+		execute(string)
+		
+		sprint(string, "system(\"rm %s.eps\")", $s2)
+		execute(string)
+		} else {
+			printerr("Lib:printjpg:This works only for windows platform")
+		}
+	}
+
+	/*
+	Fits y = mx + b to data by linear regression.
+	Expects x and y data in Vectors, returns m and b. 
+	$o1  x data
+	$o2  y data
+	$&3  m
+	$&4  b
+	*/
+	public rline
+	func rline() {
+	  return m*$1 + b
+	}
+
+	public linfit
+	proc linfit() { local num, xmean, ymean, sxy, s1sq  localobj xvec, yvec
+	  num = $o1.size()
+	  if ($o1.size() < 2) {
+		print "Data must contain two or more points."
+		quit()
+	  }
+
+	  xmean = $o1.mean
+	  ymean = $o2.mean
+
+	  xvec = $o1.c.sub(xmean)
+	  yvec = $o2.c.sub(ymean)
+
+	  sxy = xvec.c.mul(yvec).sum/(num-1)
+	  s1sq = xvec.sumsq()/(num-1)
+
+	  $&3 = sxy/s1sq
+		$&4 = -$&3*xmean + ymean
+	}
+	proc printvec() {local i localobj fp, vec
+		vec = $o2
+		fp = new File()
+		fp.aopen($s1)
+		vec.printf(fp,"%g\n")
+		fp.close()
+	}
+	
+	
+	public printerr
+	proc printerr() {  local i localobj s
+		s= new String()
+		if (numarg() > 1) {
+			sprint(s.s, "sprint(exc_str,\"%s\"",$s1)
+
+			for (i=2;i<=numarg();i+=1){
+				if (argtype(i)==0) {
+					sprint(s.s, "%s,%d",s.s,$i)
+				} else if (argtype(i)==2) {
+					sprint(s.s, "%s,\"%s\"",s.s,$si)
+				}
+			}
+			sprint(s.s,"%s)",s.s)	
+
+			execute1(s.s)
+		} else {
+			exc_str = $s1
+		}
+		print "-ERR:", exc_str
+	}	
+	public printsys
+	proc printsys() { local i localobj s
+		s= new String()
+		if (numarg() > 1) {
+			sprint(s.s, "sprint(exc_str,\"%s\"",$s1)
+
+			for (i=2;i<=numarg();i+=1){
+				if (argtype(i)==0) {
+					sprint(s.s, "%s,%d",s.s,$i)
+				} else if (argtype(i)==2) {
+					sprint(s.s, "%s,\"%s\"",s.s,$si)
+				}
+			}
+			sprint(s.s,"%s)",s.s)	
+			execute1(s.s)
+		} else {
+			exc_str = $s1
+		}
+		print "+SYS:", exc_str
+	}
+endtemplate Lib
+
+objref lib
+lib = new Lib(libpath)
+true =1
+false = 0
+
+// hoc_stdout("./stdout.log")
+
+proc mkdir() { local exs localobj s, tf
+	lib.mkdir($s1)
+}
+
+func floor() { localobj v
+	return lib.floor($1)
+}
+
+
+proc printjpg() { local exs localobj g, nil,  tf
+	lib.printjpg($o1,$s2)
+}
+
+
+func myHistogram_find() { local i, fL, fR, cnt localobj v
+	v = $o1
+	fL = $2
+	fR = $3
+	cnt = 0
+	for (i =0; i<v.size(); i= i+1) {
+		if (v.x(i) >= fL && v.x(i) < fR) {
+			cnt = cnt+1
+		}
+	}
+	return cnt
+}
+
+// Units Define
+unit_m = 1e-3
+unit_u = 1e-6
+unit_n = 1e-9
+unit_p = 1e-12
+
+
+{load_file("objDictionary.hoc")}
+{load_file("oMyString.hoc")}
+{load_file("graphLib.hoc")}
+{load_file("LocCode.hoc")}
+{load_file("RandomStream.hoc")}
+{load_file("ExpControl.hoc")}
+{load_file("CellControl.hoc")}
+{load_file("mathlib.hoc")}
+{load_file("oStruct.hoc")}
+{load_file("oLog.hoc")}
+
+lib.setmath(new MathLib())
+lib.setLog(new Log())
+
+
+/*
+Fits y = mx + b to data by linear regression.
+Expects x and y data in Vectors, returns m and b. 
+$o1  x data
+$o2  y data
+$&3  m
+$&4  b
+*/
+func rline() {
+  return lib.math.rline($1)
+}
+
+proc linfit() { 
+	lib.math.linfit($o1, $o2, $3, $4)  
+}
+
+
+obfunc myHistogram() { local i, histoLow, histoHigh, histoBin, cnt localobj v, vy, vx, v3, g // $o1 vec , $2 low, $3 high, $4 bin
+	
+	v = $o1	
+	histoLow = $2
+	histoHigh = $3
+	histoBin = $4
+	histoMax = $5
+	
+	
+	vx = new Vector((histoHigh - histoLow) / histoBin)
+	vx.indgen(histoBin)
+	vx.add(histoBin /2)
+	vy = new Vector() 
+	
+	g = new MyGraph()
+	g.size(histoLow, histoHigh, 0, histoMax) 
+	for (i=histoLow; i<histoHigh; i= i+histoBin) {
+		cnt = myHistogram_find(v, i, i+histoBin)
+		vy.append(cnt)
+		g.g.beginline 
+			g.g.line(i, 0)
+			g.g.line(i, cnt)
+			g.g.line(i+histoBin, cnt)
+			g.g.line(i+histoBin, 0)
+		g.g.flush()
+	}
+	return g
+	// g.mark(histoLow, histoHigh, 0, histoMax) 
+	// vy.mark(g, vx , "O", 3, 1, 3)
+}

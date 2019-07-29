@@ -1,0 +1,523 @@
+begintemplate CellType 
+	external lib
+	external exc_str
+	external graphList
+	// external t, tstop
+	objref this
+		
+	public type,template,ncell
+	strdef type, template	
+	objref cells, spk_trains, spk_rasters, spk_rasters_ncs
+	strdef LOG_TAG
+	proc init() {
+		 LOG_TAG = "CellType"
+		sprint(type, $s1)
+		sprint(template, $s2)
+		
+		ncell = $3
+		color_code = $4
+		cells = new List()
+		
+		spk_trains = new List()
+		spk_rasters = new List() 
+		spk_rasters_ncs = new List() 
+		
+		// print type, template, ncell
+		mkcell(template, ncell)
+	}
+	public getCC
+	func getCC() {
+		return color_code
+	}
+	proc mkcell() {local i, n localobj nc, vv
+		// $s1 : Template Name
+		// $2 : number
+		n = $2		
+		for (i=0;i<n;i+=1){
+			sprint(lib.string, "%s_%d",type,i)
+			sprint(exc_str, "%s.getCells().append(new %s(\"%s\"))",this,$s1,lib.string)
+			execute1(exc_str)
+			
+			
+			spk_trains.append(new Vector())
+			
+			// if ( !cells.o(cells.count()-1).is_art() ) {
+				// sprint(exc_str, "%s.getTrains().o(%s.getTrains().count()-1).record(&%s.getCells().o(%s.getCells().count()-1).soma.v(0.5))",this,this,this,this)
+				// execute1(exc_str)
+			// }
+			
+			spk_rasters.append(new Vector())
+			nc = cells.o(cells.count()-1).connect2target(lib.nil)
+			sprint(exc_str, "raster_handle(%d)",i)
+			nc.record(exc_str)
+			spk_rasters_ncs.append(nc)
+		}
+	}
+	public record_init
+	proc record_init() {
+		for (i=0;i<ncell;i+=1){
+			spk_rasters.o(i).resize(0)
+		}
+	}
+	public raster_handle
+	proc raster_handle() {
+		spk_rasters.o($1).append(t)		
+	}
+	public getTrains
+	obfunc getTrains() {
+		return spk_trains
+	}
+	public getRasters
+	obfunc getRasters() {
+		return spk_rasters
+	}
+	public getCells
+	obfunc getCells() {
+		return cells
+	}
+	public o
+	obfunc o() {
+		// $1 : index
+		return cells.o($1)
+	}
+endtemplate CellType
+// begintemplate ConnType 
+	// strdef 
+	// objref 
+	// proc init() {
+	
+	// }
+// endtemplate ConnType
+begintemplate CellControl
+	external lib
+	external exc_str
+	external graphList
+	external RandomStream
+	objref this
+	
+	public types, ntypes, ntotcell
+	objref types, nclist
+	strdef LOG_TAG
+
+	objref desc
+	objref r
+	proc init() {
+		LOG_TAG = "CellControl"
+		types = new List()
+		nclist = new List()
+		desc = new myString()
+		r = new RandomStream()
+
+		ntypes = 0	
+		ntotcell = 0
+		save_or_not = 0
+		lib.printsys("Cell Control System was created")
+	}
+	public setSave
+	proc setSave() {
+		save_or_not = $1
+	}
+	public append
+	func append() {local cc localobj s
+		// $s1 : Type Name
+		// $s2 : Template Name
+		// $3 : number
+		// $4 : Type Color
+		if (numarg() > 3) { 
+			cc=  $4 
+		} else {
+			cc= 1
+		}
+		
+			
+		s= new String()
+		sprint(s.s, "%s.types.append(new CellType(\"%s\",\"%s\",%d,%d))",this,$s1,$s2,$3,cc)
+		execute1(s.s)
+		ntypes +=1 
+		ntotcell += $3
+		lib.printsys("%d %s (%s) cells / %d cells were created",$3,$s1,$s2,ntotcell)
+		
+		return (ntypes-1)
+	}
+	public o
+	obfunc o() {
+		// $1 : index
+		return types.o($1)
+	}
+	public setDesc
+	proc setDesc(){
+		sprint(desc.s, "%s",$s1)		
+	}
+	public getDesc
+	obfunc getDesc() {
+		return desc
+	}
+	public getTypes
+	obfunc getTypes() {
+		return types
+	}
+	public browser
+	objref totcell,totcell_lbl 
+	proc browser(){  local i, j
+		totcell = new List()
+		totcell_lbl = new List()
+		for (i=0;i<types.count();i+=1){
+			for (j=0;j<types.o(i).getCells().count();j+=1){
+				// print types.o(i).o(j).desc
+				// totcell_lbl.append(types.o(i).o(j).desc)
+				totcell_lbl.append(types.o(i).o(j))
+				totcell.append(types.o(i).o(j))
+			}
+		}
+		totcell_lbl.browser()
+		totcell_lbl.select(0)
+	}	
+	public browser_selected
+	obfunc browser_selected() {
+		if (totcell_lbl.selected == -1) {
+			return lib.nil
+		}
+		return totcell.o(totcell_lbl.selected)
+	}
+	
+	public make_synapse
+	obfunc make_synapse() { local _recep_id localobj _pre, _post, _recep, _nc
+		// $o1 : Source Cell
+		// $o2 : Target Celll
+		_pre = $o1
+		_post = $o2
+		_recep_id= $3
+		
+
+		_recep = _post.pre_list.o(_recep_id)
+		
+		_nc = _pre.connect2target(_recep)
+
+		_nc.delay = $4
+		_nc.weight = $5
+
+		nclist.append(_nc)
+
+		return _nc
+	}	
+	public conn
+	proc conn(){ local i,j, cidx localobj _temp, _tt, _temp2, _srcs, _cnts
+		// $1 : Source Cell
+		// $2 : Target Cell
+		// $3 : Target Cell Receptor Id
+		// $4 : Delay
+		// $5 : Weight
+		// $6 : Connection Type 
+		// $7~ : Connectivity Argument
+		_src = $1
+		_target = $2
+		
+		if ($6 == 1){	// Random Connection n:1 (%7 percents)
+			types.o(_src)
+			for (i=0;i<types.o(_target).ncell;i+=1){
+				_temp = new Vector()
+				// for (idx = 0; idx< types.o(_src).ncell * ($7);idx+=1){
+					// while (1) {
+						// cidx = lib.floor(r.uniform(0,types.o(_src).ncell))
+						// if (_temp.contains(cidx) == 0) {
+							// break
+						// }
+					// }
+					// _temp.append(cidx)					
+				// }
+				
+				while (_temp.size() < types.o(_src).ncell * ($7)) {
+					cidx = lib.floor(r.uniform(0,types.o(_src).ncell))
+					if (_temp.contains(cidx) == 0) {
+						_temp.append(cidx)
+					}
+				}
+				
+				
+				print _temp.size()
+				print _temp.printf()
+				for (j=0;j<_temp.size();j+=1){
+					make_synapse(types.o(_src).o(_temp.x(j)),types.o(_target).o(i),$3,$4,$5)
+				}
+			}
+			
+		} else if ($6 == 2) {	// One-2-One Connection 1:1
+			for (i=0;i<types.o(_src).ncell;i+=1){
+				make_synapse(types.o(_src).o(i),types.o(_target).o(i),$3,$4,$5)
+			}
+			
+		} else if ($6 == 3 ) { 	// Random Connection n:1 + Feedforwar dinhibition
+			// r = new Random()
+			
+			types.o(_src)
+			for (i=0;i<types.o(_target).ncell;i+=1){
+				_temp = new Vector()
+				while (_temp.size() < types.o(_src).ncell * ($7)) {
+					cidx = lib.floor(r.uniform(0,types.o(_src).ncell))
+					if (_temp.contains(cidx) == 0) {
+						_temp.append(cidx)
+					}
+				}
+				for (j=0;j<_temp.size();j+=1){
+					make_synapse(types.o(_src).o(_temp.x(j)),types.o(_target).o(i),$3,$4,$5)
+					make_synapse(types.o(_src).o(_temp.x(j)),types.o($8).o(i),$9,$10,$11)
+				}
+			}
+			
+		} else if ($6 == 4 ) { // Same with #1 with random connection probability
+			
+			_tt = new Vector()
+			
+			types.o(_src)
+			for (i=0;i<types.o(_target).ncell;i+=1){
+				_cp = r.normal($7, 0.0005)
+				_tt.append(_cp)
+				
+				_temp = new Vector()
+				while (_temp.size() < types.o(_src).ncell * (_cp)) {
+					cidx = lib.floor(r.uniform(0,types.o(_src).ncell))
+					if (_temp.contains(cidx) == 0) {
+						_temp.append(cidx)
+					}
+				}
+				for (j=0;j<_temp.size();j+=1){
+					make_synapse(types.o(_src).o(_temp.x(j)),types.o(_target).o(i),$3,$4,$5)
+				}
+			}
+			
+			lib.printsys("CONNECTION PROBABILITY : Mean %f, Std %f, Max %f, Min %f", _tt.mean() * 100 , _tt.stdev()*100, _tt.max()*100, _tt.min()*100 )
+		} else if ($6 == 5 ) { 	// Random Connection n:1 + Feedforwar dinhibition
+			// r = new Random()
+			_tt = new Vector()
+
+			types.o(_src)
+			for (i=0;i<types.o(_target).ncell;i+=1){
+				_cp = r.normal($7, 0.0005)				
+				_tt.append(_cp)
+
+				_temp = new Vector()
+				while (_temp.size() < types.o(_src).ncell * (_cp)) {
+					cidx = lib.floor(r.uniform(0,types.o(_src).ncell))
+					if (_temp.contains(cidx) == 0) {
+						_temp.append(cidx)
+					}
+				}
+				for (j=0;j<_temp.size();j+=1){
+					make_synapse(types.o(_src).o(_temp.x(j)),types.o(_target).o(i),$3,$4,$5)
+					make_synapse(types.o(_src).o(_temp.x(j)),types.o($8).o(i),$9,$10,$11)
+				}
+			}				
+			lib.printsys("CONNECTION PROBABILITY : Mean %f, Std %f, Max %f, Min %f", _tt.mean() * 100 , _tt.stdev()*100, _tt.max()*100, _tt.min()*100 )	
+		} else if ($6 == 6) {	
+			// Random Connection from two neuronal group
+			// $7 : second source
+			_src2 = $7
+			_src1_cells = types.o(_src).ncell
+			_src2_cells = types.o(_src2).ncell
+			cntFF = 0
+			cntFB = 0
+			// for (i=0;i<types.o(_target).ncell;i+=1) {	// Cell
+				
+				_temp = new Vector()
+				while (_temp.size() < types.o(_target).ncell) {
+					cidx = lib.floor(r.uniform(0,_src1_cells+_src2_cells))
+					if (_temp.contains(cidx) == 0) {
+						_temp.append(cidx)
+					}
+				}
+				for (j=0;j<_temp.size();j+=1) {
+					cidx = _temp.x(j)
+					if (cidx>=_src1_cells){
+						make_synapse(types.o(_src2).o(cidx-_src2_cells),types.o(_target).o(j),$3,$4,$5)
+						cntFB = cntFB+1
+					} else {
+						make_synapse(types.o(_src).o(cidx),types.o(_target).o(j),$3,$4,$5)
+						cntFF = cntFF +1
+					}
+				}
+				
+			// }
+			print "FF connections: ", cntFF, " FB connections: ", cntFB
+		} else if ($6 == 7) {
+			// Random Connection from two neuronal group
+			// $7 : second source
+			
+			_srcs = $o7
+			_cnts = new Vector(_srcs.size(),0)
+			rand_scope =0
+			for (i=0;i<_srcs.size();i+=1) {
+				rand_scope = rand_scope + types.o(_srcs.x(i)).ncell
+				_cnts.x(i) = 0
+			}
+			
+			_temp = new Vector()
+			while (_temp.size() < types.o(_target).ncell) {
+				cidx = lib.floor(r.uniform(0,rand_scope))
+				if (_temp.contains(cidx) == 0) {
+					_temp.append(cidx)
+				}
+			}
+			for (j=0;j<_temp.size();j+=1) {
+				cidx = _temp.x(j)
+				
+				nowsrc = 0
+				
+				while (cidx >= types.o(_srcs.x(nowsrc)).ncell) {
+					cidx = cidx - types.o(_srcs.x(nowsrc)).ncell
+					nowsrc = nowsrc +1
+				}
+				// print "NowSRc : ", nowsrc, "  CIDX : ", cidx
+				make_synapse(types.o(_srcs.x(nowsrc)).o(cidx),types.o(_target).o(j),$3,$4,$5)
+				_cnts.x(nowsrc) += 1 
+			}
+			
+			print "Sources "
+			for (i=0;i<_srcs.size();i+=1){
+				print "Source Group ", i, " = ",_cnts.x(i)
+			}
+		}else if ($6 == 8) {
+			// Random Connection to several neuronal group
+			// $7 : second source
+			
+			_srcs = $o7
+			_cnts = new Vector(_srcs.size(),0)
+			rand_scope =0
+			for (i=0;i<_srcs.size();i+=1) {
+				rand_scope = rand_scope + types.o(_srcs.x(i)).ncell
+				_cnts.x(i) = 0
+			}
+			
+			_temp = new Vector()
+			while (_temp.size() < types.o(_src).ncell) {
+				cidx = lib.floor(r.uniform(0,rand_scope))
+				if (_temp.contains(cidx) == 0) {
+					_temp.append(cidx)
+				}
+			}
+			for (j=0;j<_temp.size();j+=1) {
+				cidx = _temp.x(j)
+				
+				nowtarget = 0
+				
+				while (cidx >= types.o(_srcs.x(nowtarget)).ncell) {
+					cidx = cidx - types.o(_srcs.x(nowtarget)).ncell
+					nowtarget = nowtarget +1
+				}
+				// print "NowSRc : ", nowsrc, "  CIDX : ", cidx
+				make_synapse(types.o(_src).o(j),types.o(_srcs.x(nowtarget)).o(cidx),$3,$4,$5)
+				_cnts.x(nowtarget) += 1 
+			}
+			
+			print "Sources "
+			for (i=0;i<_srcs.size();i+=1){
+				print "Target Group ", i, " = ",_cnts.x(i)
+			}
+		}
+	}
+	public record_init
+	objref record_data
+	proc record_init() { local i,j localobj vv, vdesc
+		lib.Log.log_i(LOG_TAG,":record_save:Record Initilization")
+
+		record_data = new Dictionary()
+		vv = new Vector()
+		vv.record(&t)
+		
+		record_data.put("t",vv)
+		for (i=0;i<types.count();i+=1){
+			for (j=0;j<types.o(i).getCells().count();j+=1){
+				vv = new Vector()
+				vv.record(&types.o(i).o(j).soma.v(0.5))
+				
+				vdesc = new myString()
+				sprint(vdesc.s, "%s_%d",types.o(i).type ,j)
+
+				record_data.put(vdesc.s,vv)
+			}
+			types.o(i).record_init()
+		}
+		lib.Log.log_i(LOG_TAG,":record_save:Record Initialized")
+	}
+	public record_save
+	proc record_save() { local i localobj keys, fp, tv,vv, mat
+		// $s1 : basename
+		// $s2 : folder		
+		
+		if ( save_or_not == lib.true) {
+			lib.Log.log_i(LOG_TAG,":record_save:Data dump start")
+			lib.mkdir($s2)
+			sprint(lib.string, "%s//%s//",$s2, $s1)			
+			lib.mkdir(lib.string)
+					
+			lib.Log.log_i(LOG_TAG,":record_save:Raster data dump start")
+			for (i=0;i<types.count();i+=1){ 
+				for (j=0;j<types.o(i).getCells().count();j+=1) {
+				// for (j=0;j<10;j+=1) {
+					fp = new File()
+					sprint(lib.string, "%s//%s//%s_%s_%d.dat",$s2, $s1,$s1, types.o(i).type, j)
+					if (fp.wopen(lib.string)) {
+						fp.printf("%s\r\n",types.o(i).o(j).desc)
+						types.o(i).getRasters().o(j).printf(fp,"%g\r\n")
+					}
+				}
+			}
+			lib.Log.log_i(LOG_TAG,":record_save:spike train dump start")
+			sprint(lib.string, "%s//%s_data.dat",$s2, $s1)
+			record_data.dump(lib.string)
+			
+			lib.Log.log_i(LOG_TAG,":record_save:Data dump Finished")
+						
+			record_data = lib.nil
+		}else {
+			lib.printerr("CellControl:record_save:Save Flag is false")
+		}
+	}
+	public getCellCount
+	func getCellCount() {local tot
+			tot = 0 
+			// Assign Action Potential Count 
+			for (i=0;i<types.count();i+=1){
+				for (j=0;j<types.o(i).getCells().count();j+=1){
+					tot+=1
+				}
+			}
+				return tot
+	}
+	public getConns
+	obfunc getConns() {
+		return nclist
+	}
+	proc makeMorn() {local i,j localobj vb, grp
+		i = $1
+		vb = new VBox() 
+		vb.intercept(1)
+			c= 1
+			if (types.o(i).ncell < c) { c= types.o(i).ncell  }			
+			for (j=0;j<c;j+=1){				
+				if (!types.o(i).o(j).is_art()) {
+					grp = new MyGraph()
+					sprint(lib.cmd, "%dth_%s",j,types.o(i).type)
+					grp.g.addvar(lib.cmd, &types.o(i).o(j).soma.v(0.5))
+					grp.size(0,1,-70,50)			
+					graphList[0].append(grp.g)
+				}
+			}
+		vb.intercept(0)
+		vb.map()
+	}
+	public mornitor	
+	objref oMorBox,pwd
+	proc mornitor() { local i
+		oMorBox = new VBox()
+		oMorBox.intercept(1)
+		for (i=0;i<types.count();i+=1){ 
+			makeMorn(i)
+		}
+		oMorBox.intercept(0)
+		oMorBox.map("Mornitor", 300, 0, 900,700)
+		
+		pwd = new PWManager()
+		pwd.hide(pwd.count()-1)
+	}
+endtemplate CellControl
+

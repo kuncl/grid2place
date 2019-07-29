@@ -1,0 +1,83 @@
+// $Id: drline.hoc,v 1.6 2006/06/29 23:36:22 billl Exp $
+
+// click and drag left button to draw lines on top of a figure interactively
+// select graph to draw on with setdrl(Graph[])
+// set color with clr, line width with lne
+// select 'Draw curve' for continuous drawing
+// select 'Arrow' to place an arrow pointing according to direction of drag
+
+objref g[10]
+{clr=1 lne=3}
+g=new Graph()
+
+//** drline(x0,y0,x1,y1,OPT graph or color) 
+proc drline () { local color,line
+  if (numarg()>4) { 
+    if (argtype(5)==0) { color=$5 
+                         if (numarg()>5) line=$6
+    } else {             graphItem = $o5 
+                         if (numarg()>5) color=$6
+                         if (numarg()>6) line=$7      }}
+  g.beginline(color,line)
+  g.line($1,$2)
+  g.line($3,$4)
+  g.flush()
+}
+
+//*** set to drawlines on top of fig
+proc setdrl () {
+  g=$o1 // select this graph for further drawing
+  xpanel("")
+  $o1.menu_tool("Draw line","drl")
+  $o1.menu_tool("Draw curve","drc")
+  $o1.menu_tool("Arrow","dra")
+  xvalue("Color","clr",1,"",1)
+  xvalue("Line","lne",1,"",1)
+  xbutton("Erase","g.erase_all()")
+  xpanel()
+  $o1.exec_menu("Draw line")
+}
+
+//*** draw line interactively on top of fig
+proc drl ()  { local x0,y0,type,x,y,keystate
+  type=$1 x=$2 y=$3 keystate=$4
+  if (type==2) {x0=x y0=y}
+  if (type==3) drline(x0,y0,x,y,clr,lne)
+}
+
+//*** draw arrow interactively on top of fig
+proc dra ()  { local x0,y0,xsz,ysz,type,x,y,keystate,rot
+  type=$1 x=$2 y=$3 keystate=$4
+  xsz=0.1*(g.size(2)-g.size(1)) // 10% of size
+  ysz=0.1*(g.size(4)-g.size(3))
+  if (type==2) {x0=x y0=y}
+  if (type==3) {
+    if (y==y0) {
+      if (x>x0) rot=-90 else rot=90
+    } else {
+      rot=-atan((x-x0)/(y-y0))/2/PI*360
+      if ((y-y0)<=0) rot+=180
+    }
+    g.glyph(arrow(),x,y,xsz,ysz,rot)
+  }
+}
+
+//*** draw curve interactively on top of fig
+proc drc ()  { local x0,y0,type,x,y,keystate
+  type=$1 x=$2 y=$3 keystate=$4
+  if (type==2) { x0=x y0=y
+  } else if (type==1) {
+    drline(x0,y0,x,y,clr,lne)
+    x0=x y0=y
+  } else if (type==3) drline(x0,y0,x,y,clr,lne)
+}
+
+obfunc arrow () { localobj o
+  o=new Glyph()
+  o.m(0,0)  o.l(0,1) o.s(1,4) // draw vertical line
+  o.m(-0.1,0.3) o.l(0,1) o.s(1,4)
+  o.l(0.1,0.3) o.s(1,4)
+  return o
+}
+
+setdrl(g)
